@@ -1,13 +1,22 @@
+# pyrefly: ignore [missing-import]
 import pygame
 
-# Grid Settings
+# =======================================================
+# DEFAULT MAP SETTINGS
+# Các giá trị này chỉ là mặc định. Khi load file .tmx,
+# game.py sẽ tự lấy width/height/tilewidth/tileheight từ TMX.
+# =======================================================
 COLS = 48
 ROWS = 32
-TILE_SIZE = 25
+TILE_SIZE = 32
 
-# Screen Settings
-SCREEN_WIDTH = COLS * TILE_SIZE
-SCREEN_HEIGHT = ROWS * TILE_SIZE
+# Khi ảnh map lớn hơn màn hình máy tính, game sẽ tự thu nhỏ cửa sổ
+# theo tỉ lệ này để không bị mất/cắt hình.
+MAX_WINDOW_RATIO = 0.90
+
+# Bật True nếu muốn nhìn lưới debug. Mặc định tắt để không che ảnh map.
+SHOW_GRID = True
+
 FPS = 60
 
 # Colors
@@ -22,8 +31,10 @@ SHIPPER_COLOR = (0, 100, 255)      # Blue
 DESTINATION_COLOR = (255, 0, 0)    # Red
 PATH_COLOR = (255, 255, 0)         # Yellow
 VISITED_COLOR = (173, 216, 230)    # Light Blue
+CURRENT_COLOR = (255, 165, 0)      # Orange
+FRONTIER_COLOR = (0, 255, 0)       # Green
 
-# Element Types (characters in the map txt file)
+# Element Types
 ROAD = '.'
 OBSTACLE = '#'
 START = 'S'

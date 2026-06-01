@@ -10,7 +10,7 @@ from src.game import Game
 
 def main():
     # Provide the path to the map file
-    map_file_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'maps', 'map1.txt')
+    map_file_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'maps', 'map1.tmx')
     
     # Check if map file exists
     if not os.path.exists(map_file_path):
