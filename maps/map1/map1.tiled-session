@@ -1,0 +1,102 @@
+{
+    "activeFile": "map1.tmx",
+    "expandedProjectPaths": [
+        "."
+    ],
+    "file.lastUsedOpenFilter": "All Files (*)",
+    "fileStates": {
+        "BasicTiles.tsx": {
+            "scaleInDock": 1,
+            "scaleInEditor": 1
+        },
+        "C:/Users/minht/AppData/Local/Temp/ca07e590-95df-4dc9-8d06-974affd153aa_map1_tmx_project.zip.3aa/maps/map1.tmx": {
+            "scale": 0.5083984375,
+            "selectedLayer": 0,
+            "viewCenter": {
+                "x": 768.0983480599307,
+                "y": 819.2393392239723
+            }
+        },
+        "C:/Users/minht/AppData/Local/Temp/ca07e590-95df-4dc9-8d06-974affd153aa_map1_tmx_project.zip.3aa/maps/map1.tmx#ai_grid_tiles": {
+            "scaleInDock": 1
+        },
+        "C:/Users/minht/Downloads/map1(1).tmx": {
+            "scale": 0.44716796875,
+            "selectedLayer": 0,
+            "viewCenter": {
+                "x": 837.4929023804326,
+                "y": 519.9388512775715
+            }
+        },
+        "C:/Users/minht/Downloads/map1(1).tmx#collision_marker": {
+            "scaleInDock": 1
+        },
+        "C:/Users/minht/Downloads/map1(2) (1).tmx": {
+            "scale": 3,
+            "selectedLayer": 3,
+            "viewCenter": {
+                "x": 216.99999999999997,
+                "y": 1047.5
+            }
+        },
+        "C:/Users/minht/Downloads/map1(2) (1).tmx#ai_grid_tiles": {
+            "scaleInDock": 1
+        },
+        "C:/Users/minht/Downloads/map1(2).tmx": {
+            "scale": 0.7075520833333333,
+            "selectedLayer": 0,
+            "viewCenter": {
+                "x": 768.1413323518588,
+                "y": 958.9400073610601
+            }
+        },
+        "C:/Users/minht/Downloads/map1(2).tmx#ai_grid_tiles": {
+            "scaleInDock": 1
+        },
+        "collision_tiles.tsx": {
+            "scaleInDock": 1,
+            "scaleInEditor": 1
+        },
+        "map1.tmx": {
+            "scale": 1.5,
+            "selectedLayer": 1,
+            "viewCenter": {
+                "x": 795.3333333333333,
+                "y": 561.6666666666666
+            }
+        },
+        "map1.tsx": {
+            "scaleInDock": 1,
+            "scaleInEditor": 0.5
+        },
+        "road_tiles.tsx": {
+            "scaleInDock": 1,
+            "scaleInEditor": 1
+        }
+    },
+    "last.externalTilesetPath": "C:/Users/minht/Downloads",
+    "last.imagePath": "C:/Users/minht/Downloads",
+    "map.height": 32,
+    "map.lastUsedFormat": "tmx",
+    "map.width": 48,
+    "openFiles": [
+        "map1.tmx",
+        "road_tiles.tsx",
+        "collision_tiles.tsx"
+    ],
+    "project": "map1.tiled-project",
+    "property.type": "int",
+    "recentFiles": [
+        "C:/Users/minht/Downloads/map1(2) (1).tmx",
+        "collision_tiles.tsx",
+        "road_tiles.tsx",
+        "map1.tmx",
+        "map1.tsx",
+        "C:/Users/minht/Downloads/map1(2).tmx",
+        "C:/Users/minht/AppData/Local/Temp/ca07e590-95df-4dc9-8d06-974affd153aa_map1_tmx_project.zip.3aa/maps/map1.tmx",
+        "C:/Users/minht/Downloads/map1(1).tmx",
+        "BasicTiles.tsx"
+    ],
+    "tileset.lastUsedFilter": "All Files (*)",
+    "tileset.lastUsedFormat": "tsx"
+}
