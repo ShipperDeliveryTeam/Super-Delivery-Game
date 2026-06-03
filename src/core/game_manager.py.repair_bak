@@ -1,0 +1,368 @@
+import random
+from typing import Dict, Tuple
+
+import pygame
+
+from .constants import (
+    BACKGROUND_COLOR,
+    GRID_LINE_COLOR,
+    HUD_BG_COLOR,
+    TEXT_COLOR,
+    PLAYER_COLOR,
+    NPC_COLORS,
+    SCREEN_WIDTH,
+    SCREEN_HEIGHT,
+    TILE_SIZE,
+    GRID_COLS,
+    GRID_ROWS,
+    GAME_TITLE,
+)
+from .event_handler import CommandType, EventHandler, GameCommand
+from .game_state import GameState
+from .settings import GameSettings
+
+try:
+    from src.systems.asset_paths import (
+        get_map_image_path,
+        get_player_sprite_paths,
+        get_npc_sprite_paths,
+        get_icon_path,
+    )
+    from src.systems.sprite_loader import SpriteLoader
+    from src.entities.directional_shipper import DirectionalShipper
+except Exception:
+    get_map_image_path = None
+    get_player_sprite_paths = None
+    get_npc_sprite_paths = None
+    get_icon_path = None
+    SpriteLoader = None
+    DirectionalShipper = None
+
+
+class GameManager:
+    def __init__(self, settings: GameSettings | None = None, debug: bool = False) -> None:
+        pygame.init()
+        pygame.font.init()
+
+        self.settings = settings or GameSettings()
+        self.settings.debug = bool(debug or self.settings.debug)
+
+        self.screen = pygame.display.set_mode(self.settings.get_window_size())
+        pygame.display.set_caption(self.settings.title or GAME_TITLE)
+
+        self.clock = pygame.time.Clock()
+        self.event_handler = EventHandler()
+        self.state = GameState.MENU
+        self.running = True
+
+        self.font_big = pygame.font.SysFont("arial", 42, bold=True)
+        self.font_mid = pygame.font.SysFont("arial", 26, bold=True)
+        self.font_small = pygame.font.SysFont("arial", 20)
+
+        self.sprite_loader = SpriteLoader(TILE_SIZE) if SpriteLoader else None
+        self.map_image = None
+        self.icons = {}
+
+        self.player = None
+        self.npc_shippers = []
+        self.move_dir = (0, 0)
+        self.move_timer = 0.0
+        self.npc_timer = 0.0
+
+        self.store_positions = [(10, 5), (30, 7), (38, 18)]
+        self.house_positions = [(15, 20), (25, 24), (42, 10)]
+        self.money_positions = [(8, 14), (18, 8), (34, 25)]
+
+        self._load_assets()
+        self._reset_game()
+
+    def _load_assets(self) -> None:
+        if self.sprite_loader and get_map_image_path:
+            map_path = get_map_image_path(self.settings.selected_map_id)
+            if map_path:
+                self.map_image = self.sprite_loader.load_image(
+                    map_path,
+                    size=(SCREEN_WIDTH, SCREEN_HEIGHT),
+                    fallback_color=BACKGROUND_COLOR,
+                    fallback_text="MAP",
+                )
+
+        if self.sprite_loader and get_icon_path:
+            self.icons["store"] = self.sprite_loader.load_image(
+                get_icon_path("store"),
+                size=(TILE_SIZE, TILE_SIZE),
+                fallback_color=(240, 170, 60),
+                fallback_text="S",
+            )
+            self.icons["house"] = self.sprite_loader.load_image(
+                get_icon_path("house"),
+                size=(TILE_SIZE, TILE_SIZE),
+                fallback_color=(80, 180, 100),
+                fallback_text="H",
+            )
+            self.icons["money"] = self.sprite_loader.load_image(
+                get_icon_path("money"),
+                size=(TILE_SIZE, TILE_SIZE),
+                fallback_color=(240, 210, 70),
+                fallback_text="$",
+            )
+
+    def _create_shipper_objects(self) -> None:
+        if not self.sprite_loader or not DirectionalShipper:
+            return
+
+        player_paths = get_player_sprite_paths() if get_player_sprite_paths else {}
+        player_sprites = self.sprite_loader.load_directional_set(
+            player_paths,
+            size=(TILE_SIZE, TILE_SIZE),
+            fallback_color=PLAYER_COLOR,
+            label="P",
+        )
+        self.player = DirectionalShipper("Player", (3, 3), player_sprites, TILE_SIZE)
+
+        self.npc_shippers = []
+        start_positions = [(8, 8), (14, 10), (20, 12), (26, 14)]
+        for i, pos in enumerate(start_positions, start=1):
+            npc_paths = get_npc_sprite_paths(i) if get_npc_sprite_paths else {}
+            npc_sprites = self.sprite_loader.load_directional_set(
+                npc_paths,
+                size=(TILE_SIZE, TILE_SIZE),
+                fallback_color=NPC_COLORS[(i - 1) % len(NPC_COLORS)],
+                label=str(i),
+            )
+            npc = DirectionalShipper(f"NPC {i}", pos, npc_sprites, TILE_SIZE)
+            npc.algorithm = ["BFS", "ASTAR", "BEAM", "Q_LEARNING"][i - 1]
+            self.npc_shippers.append(npc)
+
+    def run(self) -> None:
+        while self.running:
+            dt = self.clock.tick(self.settings.fps) / 1000.0
+            self._handle_commands()
+            self._update(dt)
+            self._draw()
+
+        pygame.quit()
+
+    def _handle_commands(self) -> None:
+        for command in self.event_handler.handle_events():
+            self._execute_command(command)
+
+    def _execute_command(self, command: GameCommand) -> None:
+        ctype = command.type
+
+        if ctype == CommandType.QUIT:
+            self.running = False
+
+        elif ctype == CommandType.START_GAME:
+            if self.state in (GameState.MENU, GameState.GAME_OVER, GameState.WIN):
+                self._reset_game()
+                self.state = GameState.PLAYING
+            elif self.state == GameState.PAUSED:
+                self.state = GameState.PLAYING
+
+        elif ctype == CommandType.PAUSE_GAME:
+            if self.state == GameState.PLAYING:
+                self.state = GameState.PAUSED
+            elif self.state == GameState.PAUSED:
+                self.state = GameState.PLAYING
+            elif self.state in (GameState.WIN, GameState.GAME_OVER):
+                self.state = GameState.MENU
+
+        elif ctype == CommandType.SELECT_MAP and command.value is not None:
+            self.settings.set_map(int(command.value))
+            self._load_assets()
+
+        elif ctype == CommandType.SELECT_ALGORITHM and command.value is not None:
+            self.settings.set_algorithm(str(command.value))
+
+        elif ctype == CommandType.TOGGLE_GRID:
+            self.settings.toggle_grid()
+
+        elif ctype == CommandType.TOGGLE_SOUND:
+            self.settings.toggle_sound()
+
+        elif ctype == CommandType.TOGGLE_PATH_HINT:
+            self.settings.toggle_path_hint()
+
+        elif ctype == CommandType.MOVE_UP:
+            self.move_dir = (0, -1)
+        elif ctype == CommandType.MOVE_DOWN:
+            self.move_dir = (0, 1)
+        elif ctype == CommandType.MOVE_LEFT:
+            self.move_dir = (-1, 0)
+        elif ctype == CommandType.MOVE_RIGHT:
+            self.move_dir = (1, 0)
+        elif ctype == CommandType.STOP_MOVE:
+            self.move_dir = (0, 0)
+
+        elif ctype == CommandType.DEBUG_WIN:
+            self.state = GameState.WIN
+        elif ctype == CommandType.DEBUG_LOSE:
+            self.state = GameState.GAME_OVER
+
+    def _update(self, dt: float) -> None:
+        if self.state != GameState.PLAYING:
+            return
+
+        self.move_timer += dt
+        if self.move_timer >= 0.12:
+            self.move_timer = 0.0
+            self._move_player()
+
+        self.npc_timer += dt
+        if self.npc_timer >= 0.25:
+            self.npc_timer = 0.0
+            self._move_npcs()
+
+        if self.player and self.player.money >= self.settings.target_revenue:
+            self.state = GameState.WIN
+
+        for npc in self.npc_shippers:
+            if npc.money >= self.settings.target_revenue:
+                self.state = GameState.GAME_OVER
+
+    def _move_player(self) -> None:
+        if not self.player:
+            return
+
+        dx, dy = self.move_dir
+        if dx == 0 and dy == 0:
+            return
+
+        self.player.move_grid(dx, dy, GRID_COLS, GRID_ROWS, min_y=1)
+
+        if self.player.grid_pos in self.money_positions:
+            self.player.money += random.randint(40, 90)
+            self.player.orders += 1
+            self.money_positions.remove(self.player.grid_pos)
+            if not self.money_positions:
+                self.money_positions = [(8, 14), (18, 8), (34, 25)]
+
+    def _move_npcs(self) -> None:
+        for npc in self.npc_shippers:
+            dx, dy = random.choice([(1, 0), (-1, 0), (0, 1), (0, -1)])
+            npc.move_grid(dx, dy, GRID_COLS, GRID_ROWS, min_y=1)
+
+            if npc.grid_pos in self.money_positions and random.random() < 0.5:
+                npc.money += random.randint(30, 80)
+
+    def _draw(self) -> None:
+        self.screen.fill(BACKGROUND_COLOR)
+
+        if self.state == GameState.MENU:
+            self._draw_menu()
+        elif self.state == GameState.PLAYING:
+            self._draw_game()
+        elif self.state == GameState.PAUSED:
+            self._draw_game()
+            self._draw_pause()
+        elif self.state == GameState.WIN:
+            self._draw_result("YOU WIN!", "Ban da dat doanh thu truoc NPC.")
+        elif self.state == GameState.GAME_OVER:
+            self._draw_result("GAME OVER", "NPC da dat doanh thu truoc ban.")
+
+        pygame.display.flip()
+
+    def _draw_menu(self) -> None:
+        self._draw_text("SUPER DELIVERY GAME", self.font_big, TEXT_COLOR, SCREEN_WIDTH // 2, 160, center=True)
+        self._draw_text("ENTER: Bat dau game", self.font_mid, TEXT_COLOR, SCREEN_WIDTH // 2, 250, center=True)
+        self._draw_text("1-4: Chon map | F1-F5: Chon thuat toan", self.font_small, TEXT_COLOR, SCREEN_WIDTH // 2, 300, center=True)
+        self._draw_text("WASD / Mui ten: Di chuyen | ESC: Tam dung", self.font_small, TEXT_COLOR, SCREEN_WIDTH // 2, 335, center=True)
+
+        info = f"Map: {self.settings.selected_map_id} | Algorithm: {self.settings.selected_algorithm}"
+        self._draw_text(info, self.font_mid, (255, 220, 100), SCREEN_WIDTH // 2, 410, center=True)
+        self._draw_text("Stage 2: Da ghep anh map, player, NPC, store, house, money.", self.font_small, (210, 210, 210), SCREEN_WIDTH // 2, 480, center=True)
+
+    def _draw_game(self) -> None:
+        if self.map_image:
+            self.screen.blit(self.map_image, (0, 0))
+        else:
+            self.screen.fill(BACKGROUND_COLOR)
+
+        pygame.draw.rect(self.screen, HUD_BG_COLOR, (0, 0, SCREEN_WIDTH, TILE_SIZE))
+
+        if self.settings.show_grid:
+            self._draw_grid()
+
+        self._draw_static_icons()
+
+        if self.player:
+            self.player.draw(self.screen)
+
+        for npc in self.npc_shippers:
+            npc.draw(self.screen)
+
+        self._draw_hud()
+
+    def _draw_static_icons(self) -> None:
+        for pos in self.store_positions:
+            self._draw_icon("store", pos)
+        for pos in self.house_positions:
+            self._draw_icon("house", pos)
+        for pos in self.money_positions:
+            self._draw_icon("money", pos)
+
+    def _draw_icon(self, icon_name: str, grid_pos: Tuple[int, int]) -> None:
+        x = grid_pos[0] * TILE_SIZE
+        y = grid_pos[1] * TILE_SIZE
+        icon = self.icons.get(icon_name)
+
+        if icon:
+            self.screen.blit(icon, (x, y))
+        else:
+            color = {
+                "store": (240, 170, 60),
+                "house": (80, 180, 100),
+                "money": (240, 210, 70),
+            }.get(icon_name, (255, 255, 255))
+            pygame.draw.rect(self.screen, color, (x + 4, y + 4, TILE_SIZE - 8, TILE_SIZE - 8), border_radius=6)
+
+    def _draw_grid(self) -> None:
+        for x in range(0, SCREEN_WIDTH, TILE_SIZE):
+            pygame.draw.line(self.screen, GRID_LINE_COLOR, (x, TILE_SIZE), (x, SCREEN_HEIGHT), 1)
+        for y in range(TILE_SIZE, SCREEN_HEIGHT, TILE_SIZE):
+            pygame.draw.line(self.screen, GRID_LINE_COLOR, (0, y), (SCREEN_WIDTH, y), 1)
+
+    def _draw_hud(self) -> None:
+        money = self.player.money if self.player else 0
+        orders = self.player.orders if self.player else 0
+        text = (
+            f"Money: {money}/{self.settings.target_revenue}   "
+            f"Orders: {orders}   "
+            f"Map: {self.settings.selected_map_id}   "
+            f"AI: {self.settings.selected_algorithm}   ESC: Pause"
+        )
+        self._draw_text(text, self.font_small, TEXT_COLOR, 12, 6)
+
+        y = 38
+        for npc in self.npc_shippers:
+            line = f"{npc.name}: {npc.money} - {getattr(npc, 'algorithm', '')}"
+            self._draw_text(line, self.font_small, (255, 255, 255), 12, y)
+            y += 22
+
+    def _draw_pause(self) -> None:
+        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 150))
+        self.screen.blit(overlay, (0, 0))
+        self._draw_text("PAUSED", self.font_big, (255, 255, 255), SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 40, center=True)
+        self._draw_text("ESC hoac ENTER de tiep tuc", self.font_mid, (255, 255, 255), SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 20, center=True)
+
+    def _draw_result(self, title: str, subtitle: str) -> None:
+        self._draw_text(title, self.font_big, (255, 255, 255), SCREEN_WIDTH // 2, 220, center=True)
+        self._draw_text(subtitle, self.font_mid, (255, 255, 255), SCREEN_WIDTH // 2, 290, center=True)
+        money = self.player.money if self.player else 0
+        self._draw_text(f"Money: {money}/{self.settings.target_revenue}", self.font_mid, (255, 220, 100), SCREEN_WIDTH // 2, 350, center=True)
+        self._draw_text("ENTER: Choi lai | ESC: Ve menu", self.font_mid, (255, 255, 255), SCREEN_WIDTH // 2, 430, center=True)
+
+    def _draw_text(self, text: str, font: pygame.font.Font, color: Tuple[int, int, int], x: int, y: int, center: bool = False) -> None:
+        surface = font.render(str(text), True, color)
+        rect = surface.get_rect()
+        if center:
+            rect.center = (x, y)
+        else:
+            rect.topleft = (x, y)
+        self.screen.blit(surface, rect)
+
+    def _reset_game(self) -> None:
+        self.money_positions = [(8, 14), (18, 8), (34, 25)]
+        self._create_shipper_objects()

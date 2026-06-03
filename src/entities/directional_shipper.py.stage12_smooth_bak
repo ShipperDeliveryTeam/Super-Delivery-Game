@@ -1,0 +1,43 @@
+from typing import Dict, Tuple
+
+import pygame
+
+
+class DirectionalShipper:
+    def __init__(
+        self,
+        name: str,
+        grid_pos: Tuple[int, int],
+        sprites: Dict[str, pygame.Surface],
+        tile_size: int = 32,
+    ):
+        self.name = name
+        self.grid_x = int(grid_pos[0])
+        self.grid_y = int(grid_pos[1])
+        self.sprites = sprites
+        self.tile_size = tile_size
+        self.direction = "down"
+        self.money = 0
+        self.orders = 0
+        self.algorithm = "ASTAR"
+
+    @property
+    def grid_pos(self) -> Tuple[int, int]:
+        return self.grid_x, self.grid_y
+
+    def set_grid_pos(self, pos: Tuple[int, int]) -> None:
+        self.grid_x = int(pos[0])
+        self.grid_y = int(pos[1])
+
+    def move_grid(self, dx: int, dy: int, max_cols: int, max_rows: int, min_y: int = 0) -> None:
+        if dx < 0:
+            self.direction = "left"
+        elif dx > 0:
+            self.direction = "right"
+        elif dy < 0:
+            self.direction = "up"
+        elif dy > 0:
+            self.direction = "down"
+
+        self.grid_x = max(0, min(max_cols - 1, self.grid_x + dx))
+        self.grid_y = max(min_y, min(max_rows - 1, self.grid_y + dy))

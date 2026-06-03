@@ -1,0 +1,902 @@
+import random
+from pathlib import Path
+from typing import List, Optional, Tuple
+
+import pygame
+
+from .constants import (
+    BACKGROUND_COLOR,
+    GRID_LINE_COLOR,
+    TEXT_COLOR,
+    PLAYER_COLOR,
+    NPC_COLORS,
+    SCREEN_WIDTH,
+    SCREEN_HEIGHT,
+    TILE_SIZE,
+    GRID_COLS,
+    GRID_ROWS,
+    GAME_TITLE,
+)
+from .event_handler import CommandType, EventHandler, GameCommand
+from .game_state import GameState
+from .settings import GameSettings
+
+from src.ai.game_pathfinder import GamePathfinder
+from src.gameplay.delivery_task import DeliveryTask
+from src.gameplay.order_generator import OrderGenerator
+from src.maps.matrix_loader import MatrixLoader
+from src.maps.tmx_loader import TmxMapLoader
+from src.systems.stats_logger import StatsLogger, GameStatsRecord
+
+from src.systems.asset_paths import (
+    get_map_image_path,
+    get_player_sprite_paths,
+    get_npc_sprite_paths,
+    get_icon_path,
+    MAPS_DIR,
+)
+from src.systems.sprite_loader import SpriteLoader
+from src.entities.directional_shipper import DirectionalShipper
+
+
+class GameManager:
+    def __init__(self, settings: GameSettings | None = None, debug: bool = False) -> None:
+        pygame.init()
+        pygame.font.init()
+
+        self.settings = settings or GameSettings()
+        self.settings.debug = bool(debug or self.settings.debug)
+
+        self.screen = pygame.display.set_mode(self.settings.get_window_size())
+        pygame.display.set_caption(self.settings.title or GAME_TITLE)
+
+        self.clock = pygame.time.Clock()
+        self.event_handler = EventHandler()
+        self.state = GameState.MENU
+        self.running = True
+
+        self.font_big = pygame.font.SysFont("arial", 42, bold=True)
+        self.font_mid = pygame.font.SysFont("arial", 24, bold=True)
+        self.font_small = pygame.font.SysFont("arial", 18)
+        self.font_tiny = pygame.font.SysFont("arial", 15)
+
+        self.sprite_loader = SpriteLoader(TILE_SIZE)
+        self.matrix_loader = MatrixLoader(GRID_COLS, GRID_ROWS)
+        self.tmx_loader = TmxMapLoader(GRID_COLS, GRID_ROWS, TILE_SIZE)
+        self.stats_logger = StatsLogger("stats.csv")
+        self.order_generator = OrderGenerator()
+
+        self.map_image = None
+        self.map_source = "none"
+        self.icons = {}
+
+        self.grid_matrix = self.matrix_loader.create_demo_matrix()
+        self.map_cols = GRID_COLS
+        self.map_rows = GRID_ROWS
+        self.blocked_positions = set()
+
+        self.store_positions: list[Tuple[int, int]] = []
+        self.house_positions: list[Tuple[int, int]] = []
+        self.trap_positions: set[Tuple[int, int]] = set()
+
+        self.player_spawn: Tuple[int, int] = (3, 3)
+        self.npc_spawns: list[Tuple[int, int]] = []
+
+        self.pathfinder = GamePathfinder(GRID_COLS, GRID_ROWS, set())
+
+        self.player: Optional[DirectionalShipper] = None
+        self.player_task: Optional[DeliveryTask] = None
+        self.player_path_hint: List[Tuple[int, int]] = []
+        self.player_path_expanded = 0
+
+        self.npc_shippers: list[DirectionalShipper] = []
+        self.npc_tasks: dict[str, DeliveryTask] = {}
+        self.npc_paths: dict[str, List[Tuple[int, int]]] = {}
+        self.npc_expanded: dict[str, int] = {}
+
+        self.move_dir = (0, 0)
+        self.move_timer = 0.0
+        self.npc_timer = 0.0
+        self.order_timer = 0.0
+
+        self.elapsed_time = 0.0
+        self.result_logged = False
+        self.winner_name = ""
+        self.auto_player_enabled = False
+
+        self._load_assets()
+        self._load_map_for_selected_map()
+        self._reset_game()
+
+    def _asset_maps_dir(self) -> Path:
+        return Path(MAPS_DIR)
+
+    def _tmx_path(self, map_id: int) -> Path:
+        return self._asset_maps_dir() / f"map_{map_id}.tmx"
+
+    def _matrix_path(self, map_id: int) -> Path:
+        return self._asset_maps_dir() / f"map_{map_id}_matrix.csv"
+
+    def _load_assets(self) -> None:
+        self.icons["store"] = self.sprite_loader.load_image(
+            get_icon_path("store"),
+            size=(TILE_SIZE, TILE_SIZE),
+            fallback_color=(240, 170, 60),
+            fallback_text="S",
+        )
+
+        self.icons["house"] = self.sprite_loader.load_image(
+            get_icon_path("house"),
+            size=(TILE_SIZE, TILE_SIZE),
+            fallback_color=(80, 180, 100),
+            fallback_text="H",
+        )
+
+        self.icons["money"] = self.sprite_loader.load_image(
+            get_icon_path("money"),
+            size=(TILE_SIZE, TILE_SIZE),
+            fallback_color=(240, 210, 70),
+            fallback_text="$",
+        )
+
+    def _load_map_for_selected_map(self) -> None:
+        map_id = self.settings.selected_map_id
+        tmx_path = self._tmx_path(map_id)
+
+        if tmx_path.exists():
+            try:
+                data = self.tmx_loader.load(tmx_path)
+
+                self.grid_matrix = data.grid
+                self.map_cols = data.width
+                self.map_rows = data.height
+                self.map_image = data.surface
+
+                if data.pixel_width != SCREEN_WIDTH or data.pixel_height != SCREEN_HEIGHT:
+                    self.map_image = pygame.transform.smoothscale(data.surface, (SCREEN_WIDTH, SCREEN_HEIGHT))
+
+                self.store_positions = data.store_positions
+                self.house_positions = data.house_positions
+                self.trap_positions = set(data.trap_positions)
+                self.player_spawn = data.player_spawn or (3, 3)
+                self.npc_spawns = data.npc_spawns or []
+
+                self.blocked_positions = self.tmx_loader.blocked_positions(self.grid_matrix)
+                self.pathfinder = GamePathfinder(self.map_cols, self.map_rows, self.blocked_positions)
+                self.map_source = f"TMX: {tmx_path.name}"
+                self._ensure_minimum_positions()
+                return
+
+            except Exception as exc:
+                print(f"[WARN] Không load được TMX {tmx_path}: {exc}")
+                print("[WARN] Fallback sang CSV matrix.")
+
+        self._load_csv_matrix_fallback(map_id)
+
+    def _load_csv_matrix_fallback(self, map_id: int) -> None:
+        matrix_path = self._matrix_path(map_id)
+        self.grid_matrix = self.matrix_loader.load_csv(matrix_path)
+
+        if not matrix_path.exists():
+            self.matrix_loader.save_csv(matrix_path, self.grid_matrix)
+
+        self.map_cols = GRID_COLS
+        self.map_rows = GRID_ROWS
+        self.blocked_positions = self.matrix_loader.blocked_positions(self.grid_matrix)
+        self.store_positions = self.matrix_loader.extract_positions(self.grid_matrix, MatrixLoader.STORE)
+        self.house_positions = self.matrix_loader.extract_positions(self.grid_matrix, MatrixLoader.HOUSE)
+        self.trap_positions = set(self.matrix_loader.extract_positions(self.grid_matrix, MatrixLoader.TRAP))
+        self.player_spawn = (3, 3)
+        self.npc_spawns = []
+
+        safe = set(self.store_positions + self.house_positions) | self.trap_positions
+        self.blocked_positions -= safe
+        self.pathfinder = GamePathfinder(self.map_cols, self.map_rows, self.blocked_positions)
+        self.map_source = f"CSV: {matrix_path.name}"
+        self._load_png_map_background()
+        self._ensure_minimum_positions()
+
+    def _load_png_map_background(self) -> None:
+        map_path = get_map_image_path(self.settings.selected_map_id)
+
+        if map_path:
+            self.map_image = self.sprite_loader.load_image(
+                map_path,
+                size=(SCREEN_WIDTH, SCREEN_HEIGHT),
+                fallback_color=BACKGROUND_COLOR,
+                fallback_text="MAP",
+            )
+
+    def _ensure_minimum_positions(self) -> None:
+        if not self.store_positions:
+            self.store_positions = [
+                self._nearest_walkable((6, 5)),
+                self._nearest_walkable((18, 10)),
+                self._nearest_walkable((31, 16)),
+                self._nearest_walkable((40, 22)),
+            ]
+
+        if not self.house_positions:
+            self.house_positions = [
+                self._nearest_walkable((10, 22)),
+                self._nearest_walkable((22, 27)),
+                self._nearest_walkable((36, 27)),
+                self._nearest_walkable((44, 10)),
+            ]
+
+        self.player_spawn = self._nearest_walkable(self.player_spawn)
+
+    def _grid_to_screen(self, pos: Tuple[int, int]) -> Tuple[int, int]:
+        x, y = pos
+        cell_w = SCREEN_WIDTH / max(1, self.map_cols)
+        cell_h = SCREEN_HEIGHT / max(1, self.map_rows)
+        return int(x * cell_w), int(y * cell_h)
+
+    def _cell_size_screen(self) -> Tuple[int, int]:
+        return int(SCREEN_WIDTH / max(1, self.map_cols)), int(SCREEN_HEIGHT / max(1, self.map_rows))
+
+    def _nearest_walkable(self, start: Tuple[int, int]) -> Tuple[int, int]:
+        if self.pathfinder.is_walkable(start):
+            return start
+
+        sx, sy = start
+
+        for radius in range(1, max(self.map_cols, self.map_rows)):
+            for dy in range(-radius, radius + 1):
+                for dx in range(-radius, radius + 1):
+                    pos = (sx + dx, sy + dy)
+
+                    if self.pathfinder.is_walkable(pos):
+                        return pos
+
+        return (0, 0)
+
+    def _create_shipper_objects(self) -> None:
+        player_sprites = self.sprite_loader.load_directional_set(
+            get_player_sprite_paths(),
+            size=(TILE_SIZE, TILE_SIZE),
+            fallback_color=PLAYER_COLOR,
+            label="P",
+        )
+
+        self.player = DirectionalShipper("Player", self.player_spawn, player_sprites, TILE_SIZE)
+
+        self.npc_shippers = []
+        default_positions = [(8, 8), (14, 10), (20, 12), (26, 14)]
+        algorithms = ["BFS", "ASTAR", "BEAM", "Q_LEARNING"]
+
+        for i in range(4):
+            npc_sprites = self.sprite_loader.load_directional_set(
+                get_npc_sprite_paths(i + 1),
+                size=(TILE_SIZE, TILE_SIZE),
+                fallback_color=NPC_COLORS[i % len(NPC_COLORS)],
+                label=str(i + 1),
+            )
+
+            raw_pos = self.npc_spawns[i] if i < len(self.npc_spawns) else default_positions[i]
+            pos = self._nearest_walkable(raw_pos)
+
+            npc = DirectionalShipper(f"NPC {i + 1}", pos, npc_sprites, TILE_SIZE)
+            npc.algorithm = algorithms[i]
+            self.npc_shippers.append(npc)
+
+    def run(self) -> None:
+        while self.running:
+            dt = self.clock.tick(self.settings.fps) / 1000.0
+            self._handle_commands()
+            self._update(dt)
+            self._draw()
+
+        pygame.quit()
+
+    def _handle_commands(self) -> None:
+        for command in self.event_handler.handle_events():
+            self._execute_command(command)
+
+    def _execute_command(self, command: GameCommand) -> None:
+        ctype = command.type
+
+        if ctype == CommandType.QUIT:
+            self.running = False
+
+        elif ctype == CommandType.START_GAME:
+            if self.state in (GameState.MENU, GameState.GAME_OVER, GameState.WIN):
+                self._reset_game()
+                self.state = GameState.PLAYING
+            elif self.state == GameState.PAUSED:
+                self.state = GameState.PLAYING
+
+        elif ctype == CommandType.PAUSE_GAME:
+            if self.state == GameState.PLAYING:
+                self.state = GameState.PAUSED
+            elif self.state == GameState.PAUSED:
+                self.state = GameState.PLAYING
+            elif self.state in (GameState.WIN, GameState.GAME_OVER):
+                self.state = GameState.MENU
+
+        elif ctype == CommandType.SELECT_MAP and command.value is not None:
+            self.settings.set_map(int(command.value))
+            self._load_map_for_selected_map()
+            self._reset_game()
+
+        elif ctype == CommandType.SELECT_ALGORITHM and command.value is not None:
+            self.settings.set_algorithm(str(command.value))
+            self._refresh_player_path_hint()
+
+        elif ctype == CommandType.TOGGLE_GRID:
+            self.settings.toggle_grid()
+
+        elif ctype == CommandType.TOGGLE_PATH_HINT:
+            self.settings.toggle_path_hint()
+
+        elif ctype == CommandType.TOGGLE_SOUND:
+            self.settings.toggle_sound()
+
+        elif ctype == CommandType.TOGGLE_AUTO_PLAYER:
+            self.auto_player_enabled = not self.auto_player_enabled
+            self._refresh_player_path_hint()
+
+        elif ctype == CommandType.MOVE_UP:
+            self.move_dir = (0, -1)
+
+        elif ctype == CommandType.MOVE_DOWN:
+            self.move_dir = (0, 1)
+
+        elif ctype == CommandType.MOVE_LEFT:
+            self.move_dir = (-1, 0)
+
+        elif ctype == CommandType.MOVE_RIGHT:
+            self.move_dir = (1, 0)
+
+        elif ctype == CommandType.STOP_MOVE:
+            self.move_dir = (0, 0)
+
+        elif ctype == CommandType.DEBUG_WIN:
+            self._finish_game("Player")
+
+        elif ctype == CommandType.DEBUG_LOSE:
+            self._finish_game("NPC DEBUG")
+
+    def _poll_keyboard_movement(self) -> None:
+        keys = pygame.key.get_pressed()
+
+        dx, dy = 0, 0
+
+        if keys[pygame.K_a] or keys[pygame.K_LEFT]:
+            dx = -1
+        elif keys[pygame.K_d] or keys[pygame.K_RIGHT]:
+            dx = 1
+        elif keys[pygame.K_w] or keys[pygame.K_UP]:
+            dy = -1
+        elif keys[pygame.K_s] or keys[pygame.K_DOWN]:
+            dy = 1
+
+        self.move_dir = (dx, dy)
+
+        if self.player and (dx != 0 or dy != 0):
+            self.player.set_direction_from_delta(dx, dy)
+
+    def _update_smooth_entities(self, dt: float) -> None:
+        if self.player:
+            self.player.update_smooth(dt)
+
+        for npc in self.npc_shippers:
+            npc.update_smooth(dt)
+
+    def _move_player_auto(self) -> None:
+        if not self.player:
+            return
+
+        if self.player_task is None or self.player_task.delivered:
+            self.player_task = self._new_task("Player")
+
+        if not self.player_path_hint or len(self.player_path_hint) <= 1:
+            self._refresh_player_path_hint()
+
+        if not self.player_path_hint or len(self.player_path_hint) <= 1:
+            return
+
+        next_pos = self.player_path_hint[1]
+        dx = next_pos[0] - self.player.grid_pos[0]
+        dy = next_pos[1] - self.player.grid_pos[1]
+
+        if abs(dx) + abs(dy) != 1:
+            self._refresh_player_path_hint()
+            return
+
+        old_dir = self.move_dir
+        self.move_dir = (dx, dy)
+        self._move_player()
+        self.move_dir = old_dir
+
+        self._refresh_player_path_hint()
+
+    def _update(self, dt: float) -> None:
+        if self.state != GameState.PLAYING:
+            return
+
+        self._update_smooth_entities(dt)
+        self.elapsed_time += dt
+
+        if not self.auto_player_enabled:
+            self._poll_keyboard_movement()
+
+        self.move_timer += dt
+
+        if self.move_timer >= 0.065:
+            self.move_timer = 0.0
+
+            if self.auto_player_enabled:
+                self._move_player_auto()
+            else:
+                self._move_player()
+
+        self.npc_timer += dt
+
+        if self.npc_timer >= 0.18:
+            self.npc_timer = 0.0
+            self._update_npcs()
+
+        self.order_timer += dt
+
+        if self.order_timer >= 0.8:
+            self.order_timer = 0.0
+            self._refresh_player_path_hint()
+
+        if self.player and self.player.money >= self.settings.target_revenue:
+            self._finish_game("Player")
+            return
+
+        for npc in self.npc_shippers:
+            if npc.money >= self.settings.target_revenue:
+                self._finish_game(npc.name)
+                return
+
+    def _finish_game(self, winner_name: str) -> None:
+        if self.result_logged:
+            return
+
+        self.winner_name = winner_name
+        self.state = GameState.WIN if winner_name == "Player" else GameState.GAME_OVER
+        self._log_result()
+        self.result_logged = True
+
+    def _log_result(self) -> None:
+        player_money = self.player.money if self.player else 0
+        player_orders = self.player.orders if self.player else 0
+
+        record = GameStatsRecord(
+            timestamp=StatsLogger.now_text(),
+            map_id=self.settings.selected_map_id,
+            map_source=self.map_source,
+            winner=self.winner_name,
+            player_win=(self.winner_name == "Player"),
+            elapsed_time=round(self.elapsed_time, 2),
+            target_revenue=self.settings.target_revenue,
+            player_money=player_money,
+            player_orders=player_orders,
+            player_algorithm=self.settings.selected_algorithm,
+            player_expanded_nodes=self.player_path_expanded,
+        )
+
+        for index, npc in enumerate(self.npc_shippers, start=1):
+            setattr(record, f"npc_{index}_money", npc.money)
+            setattr(record, f"npc_{index}_orders", npc.orders)
+            setattr(record, f"npc_{index}_algorithm", getattr(npc, "algorithm", ""))
+            setattr(record, f"npc_{index}_expanded_nodes", self.npc_expanded.get(npc.name, 0))
+
+        self.stats_logger.write_record(record)
+
+    def _new_task(self, holder_name: Optional[str] = None) -> DeliveryTask:
+        return self.order_generator.create_order(
+            stores=self.store_positions,
+            houses=self.house_positions,
+            pathfinder=self.pathfinder,
+            holder_name=holder_name,
+        )
+
+    def _move_player(self) -> None:
+        if not self.player:
+            return
+
+        dx, dy = self.move_dir
+
+        if dx == 0 and dy == 0:
+            return
+
+        old_pos = self.player.grid_pos
+        next_pos = (old_pos[0] + dx, old_pos[1] + dy)
+
+        if not self.pathfinder.is_walkable(next_pos):
+            return
+
+        self.player.move_grid(dx, dy, self.map_cols, self.map_rows, min_y=0)
+
+        if self.player_task is None or self.player_task.delivered:
+            self.player_task = self._new_task("Player")
+
+        self.player_task.assign_to("Player")
+
+        picked = self.player_task.try_pickup("Player", self.player.grid_pos)
+        delivered = self.player_task.try_deliver("Player", self.player.grid_pos)
+
+        if picked:
+            self._refresh_player_path_hint()
+
+        if delivered:
+            self.player.money += self.player_task.reward
+            self.player.orders += 1
+            self.player_task = self._new_task("Player")
+            self._refresh_player_path_hint()
+
+        if self.player.grid_pos in self.trap_positions:
+            self.player.money = max(0, self.player.money - 15)
+
+    def _update_npcs(self) -> None:
+        for npc in self.npc_shippers:
+            if npc.name not in self.npc_tasks or self.npc_tasks[npc.name].delivered:
+                self.npc_tasks[npc.name] = self._new_task(npc.name)
+                self.npc_paths[npc.name] = []
+
+            task = self.npc_tasks[npc.name]
+            task.assign_to(npc.name)
+
+            if not self.npc_paths.get(npc.name):
+                result = self.pathfinder.find_path(npc.grid_pos, task.target_pos, npc.algorithm)
+                self.npc_paths[npc.name] = result.path[1:] if result.success and len(result.path) > 1 else []
+                self.npc_expanded[npc.name] = result.expanded_nodes
+
+            path = self.npc_paths.get(npc.name, [])
+
+            if path:
+                next_pos = path.pop(0)
+                dx = next_pos[0] - npc.grid_pos[0]
+                dy = next_pos[1] - npc.grid_pos[1]
+
+                if self.pathfinder.is_walkable(next_pos):
+                    npc.move_grid(dx, dy, self.map_cols, self.map_rows, min_y=0)
+
+            picked = task.try_pickup(npc.name, npc.grid_pos)
+            delivered = task.try_deliver(npc.name, npc.grid_pos)
+
+            if picked:
+                self.npc_paths[npc.name] = []
+
+            if delivered:
+                npc.money += task.reward
+                npc.orders += 1
+                self.npc_tasks[npc.name] = self._new_task(npc.name)
+                self.npc_paths[npc.name] = []
+
+            if npc.grid_pos in self.trap_positions:
+                npc.money = max(0, npc.money - 10)
+
+    def _refresh_player_path_hint(self) -> None:
+        if not self.player:
+            return
+
+        if self.player_task is None or self.player_task.delivered:
+            self.player_task = self._new_task("Player")
+
+        result = self.pathfinder.find_path(
+            self.player.grid_pos,
+            self.player_task.target_pos,
+            self.settings.selected_algorithm,
+        )
+
+        self.player_path_hint = result.path
+        self.player_path_expanded = result.expanded_nodes
+
+    def _draw(self) -> None:
+        self.screen.fill(BACKGROUND_COLOR)
+
+        if self.state == GameState.MENU:
+            self._draw_menu()
+
+        elif self.state == GameState.PLAYING:
+            self._draw_game()
+
+        elif self.state == GameState.PAUSED:
+            self._draw_game()
+            self._draw_pause()
+
+        elif self.state == GameState.WIN:
+            self._draw_result("YOU WIN!", "Bạn đạt doanh thu trước NPC.")
+
+        elif self.state == GameState.GAME_OVER:
+            self._draw_result("GAME OVER", f"{self.winner_name} đạt doanh thu trước bạn.")
+
+        pygame.display.flip()
+
+    def _draw_menu(self) -> None:
+        self.screen.fill((22, 29, 39))
+        self._draw_text("SUPER DELIVERY GAME", self.font_big, (255, 230, 120), SCREEN_WIDTH // 2, 145, center=True)
+        self._draw_text("AI Delivery Simulation with Pygame + TMX Map", self.font_mid, TEXT_COLOR, SCREEN_WIDTH // 2, 200, center=True)
+
+        box = pygame.Rect(SCREEN_WIDTH // 2 - 360, 250, 720, 310)
+        self._draw_panel(box, alpha=170, border=True)
+
+        lines = [
+            "ENTER: Bắt đầu game",
+            "WASD / Mũi tên: tự điều khiển player",
+            "SPACE: bật/tắt Auto Player",
+            "F1 BFS | F2 A* | F3 Beam | F4 Partial | F5 Q-Learning",
+            "P: bật/tắt đường gợi ý | G: bật/tắt grid | ESC: tạm dừng",
+            f"Map: {self.settings.selected_map_id} | Source: {self.map_source}",
+            f"Player Hint AI: {self.settings.selected_algorithm}",
+        ]
+
+        y = 280
+
+        for line in lines:
+            self._draw_text(line, self.font_small, (245, 245, 245), SCREEN_WIDTH // 2, y, center=True)
+            y += 38
+
+    def _draw_game(self) -> None:
+        if self.map_image:
+            self.screen.blit(self.map_image, (0, 0))
+        else:
+            self.screen.fill(BACKGROUND_COLOR)
+            self._draw_matrix_overlay()
+
+        self._draw_static_icons()
+
+        if self.settings.show_path_hint:
+            self._draw_paths()
+
+        if self.player:
+            self._draw_shipper_scaled(self.player)
+
+        for npc in self.npc_shippers:
+            self._draw_shipper_scaled(npc)
+
+        if self.settings.show_grid:
+            self._draw_grid()
+
+        self._draw_hud_clean()
+
+    def _draw_shipper_scaled(self, shipper) -> None:
+        sprite = shipper.sprites.get(shipper.direction) or shipper.sprites.get("idle")
+        cell_w, cell_h = self._cell_size_screen()
+
+        if hasattr(shipper, "render_pos"):
+            rx, ry = shipper.render_pos
+            x = int(rx * cell_w)
+            y = int(ry * cell_h)
+        else:
+            x, y = self._grid_to_screen(shipper.grid_pos)
+
+        if sprite.get_width() != cell_w or sprite.get_height() != cell_h:
+            sprite = pygame.transform.smoothscale(sprite, (cell_w, cell_h))
+
+        self.screen.blit(sprite, (x, y))
+
+    def _draw_matrix_overlay(self) -> None:
+        cell_w, cell_h = self._cell_size_screen()
+
+        for y, row in enumerate(self.grid_matrix):
+            for x, code in enumerate(row):
+                rect = (x * cell_w, y * cell_h, cell_w, cell_h)
+
+                if code == MatrixLoader.BLOCK:
+                    pygame.draw.rect(self.screen, (45, 45, 52), rect)
+                elif code == MatrixLoader.WATER:
+                    pygame.draw.rect(self.screen, (40, 100, 170), rect)
+                elif code == MatrixLoader.TRAP:
+                    pygame.draw.rect(self.screen, (150, 75, 35), rect)
+
+    def _draw_static_icons(self) -> None:
+        for pos in self.store_positions:
+            self._draw_icon("store", pos)
+
+        for pos in self.house_positions:
+            self._draw_icon("house", pos)
+
+        if self.player_task and not self.player_task.delivered:
+            self._draw_target_marker(self.player_task.target_pos)
+
+    def _draw_target_marker(self, grid_pos: Tuple[int, int]) -> None:
+        x, y = self._grid_to_screen(grid_pos)
+        cell_w, cell_h = self._cell_size_screen()
+        pygame.draw.rect(self.screen, (255, 235, 60), (x + 2, y + 2, cell_w - 4, cell_h - 4), width=3, border_radius=6)
+
+    def _draw_paths(self) -> None:
+        self._draw_path(self.player_path_hint, (255, 245, 50), radius=4)
+
+        colors = [(255, 80, 80), (80, 255, 120), (255, 180, 70), (180, 120, 255)]
+
+        for i, npc in enumerate(self.npc_shippers):
+            self._draw_path(self.npc_paths.get(npc.name, []), colors[i % len(colors)], radius=3)
+
+    def _draw_path(self, path: List[Tuple[int, int]], color: Tuple[int, int, int], radius: int = 3) -> None:
+        if not path:
+            return
+
+        cell_w, cell_h = self._cell_size_screen()
+        points = []
+
+        for gx, gy in path:
+            x, y = self._grid_to_screen((gx, gy))
+            points.append((x + cell_w // 2, y + cell_h // 2))
+
+        if len(points) >= 2:
+            pygame.draw.lines(self.screen, color, False, points, 3)
+
+        for point in points:
+            pygame.draw.circle(self.screen, color, point, radius)
+
+    def _draw_icon(self, icon_name: str, grid_pos: Tuple[int, int]) -> None:
+        x, y = self._grid_to_screen(grid_pos)
+        cell_w, cell_h = self._cell_size_screen()
+        icon = self.icons.get(icon_name)
+
+        if icon:
+            if icon.get_width() != cell_w or icon.get_height() != cell_h:
+                icon = pygame.transform.smoothscale(icon, (cell_w, cell_h))
+
+            self.screen.blit(icon, (x, y))
+
+        else:
+            color = {
+                "store": (240, 170, 60),
+                "house": (80, 180, 100),
+                "money": (240, 210, 70),
+            }.get(icon_name, (255, 255, 255))
+
+            pygame.draw.rect(self.screen, color, (x + 4, y + 4, cell_w - 8, cell_h - 8), border_radius=6)
+
+    def _draw_grid(self) -> None:
+        cell_w, cell_h = self._cell_size_screen()
+
+        for x in range(0, SCREEN_WIDTH + 1, max(1, cell_w)):
+            pygame.draw.line(self.screen, GRID_LINE_COLOR, (x, 0), (x, SCREEN_HEIGHT), 1)
+
+        for y in range(0, SCREEN_HEIGHT + 1, max(1, cell_h)):
+            pygame.draw.line(self.screen, GRID_LINE_COLOR, (0, y), (SCREEN_WIDTH, y), 1)
+
+    def _draw_hud_clean(self) -> None:
+        top_bar = pygame.Rect(0, 0, SCREEN_WIDTH, 54)
+        self._draw_panel(top_bar, alpha=165, border=False)
+
+        money = self.player.money if self.player else 0
+        orders = self.player.orders if self.player else 0
+        mode = "AUTO" if self.auto_player_enabled else "MANUAL"
+
+        top_text = (
+            f"Time {self.elapsed_time:05.1f}s | "
+            f"Money ${money}/{self.settings.target_revenue} | "
+            f"Orders {orders} | "
+            f"AI {self.settings.selected_algorithm} | "
+            f"Mode {mode} | "
+            f"Map {self.settings.selected_map_id}"
+        )
+
+        self._draw_text(top_text, self.font_small, (255, 255, 255), 18, 14)
+
+        mission_box = pygame.Rect(12, 66, 430, 142)
+        self._draw_panel(mission_box, alpha=145, border=True)
+        self._draw_text("PLAYER MISSION", self.font_small, (255, 230, 110), 24, 76)
+
+        if self.player_task:
+            status = "GO TO STORE" if not self.player_task.picked_up else "DELIVER TO HOUSE"
+            target = self.player_task.target_pos
+            local_cost = getattr(self.order_generator.last_result, "cost", 0)
+
+            lines = [
+                f"Status: {status}",
+                f"Target grid: {target}",
+                f"Store -> House: {self.player_task.store_pos} -> {self.player_task.house_pos}",
+                f"Local Search cost: {local_cost}",
+                f"Reward: ${self.player_task.reward}",
+                f"Expanded nodes: {self.player_path_expanded}",
+            ]
+
+        else:
+            lines = ["No active task"]
+
+        y = 103
+
+        for line in lines:
+            self._draw_text(line, self.font_tiny, (245, 245, 245), 24, y)
+            y += 19
+
+        board_w = 405
+        board_h = 145
+        board = pygame.Rect(SCREEN_WIDTH - board_w - 12, 66, board_w, board_h)
+        self._draw_panel(board, alpha=145, border=True)
+        self._draw_text("NPC SCOREBOARD", self.font_small, (255, 230, 110), board.x + 12, board.y + 10)
+
+        y = board.y + 38
+
+        for npc in self.npc_shippers:
+            task = self.npc_tasks.get(npc.name)
+            action = ""
+
+            if task:
+                action = "Pickup" if not task.picked_up else "Deliver"
+
+            line = f"{npc.name}: ${npc.money:03d} | {npc.algorithm:<10} | {action:<7} | Nodes {self.npc_expanded.get(npc.name, 0)}"
+            self._draw_text(line, self.font_tiny, (245, 245, 245), board.x + 12, y)
+            y += 24
+
+        help_box = pygame.Rect(12, SCREEN_HEIGHT - 42, SCREEN_WIDTH - 24, 30)
+        self._draw_panel(help_box, alpha=120, border=False)
+        help_text = "CLICK window first | WASD smooth move | SPACE auto-player | F1 BFS | F2 A* | F3 Beam | F4 Partial | F5 Q-Learning | P path | G grid | ESC pause"
+        self._draw_text(help_text, self.font_tiny, (255, 255, 255), 24, SCREEN_HEIGHT - 34)
+
+    def _draw_panel(self, rect: pygame.Rect, alpha: int = 150, border: bool = True) -> None:
+        panel = pygame.Surface((rect.width, rect.height), pygame.SRCALPHA)
+        panel.fill((10, 14, 22, alpha))
+        self.screen.blit(panel, (rect.x, rect.y))
+
+        if border:
+            pygame.draw.rect(self.screen, (255, 255, 255), rect, width=1, border_radius=6)
+
+    def _draw_pause(self) -> None:
+        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 150))
+        self.screen.blit(overlay, (0, 0))
+
+        self._draw_text("PAUSED", self.font_big, (255, 255, 255), SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 40, center=True)
+        self._draw_text("ESC hoặc ENTER để tiếp tục", self.font_mid, (255, 255, 255), SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 20, center=True)
+
+    def _draw_result(self, title: str, subtitle: str) -> None:
+        self.screen.fill((22, 29, 39))
+        self._draw_text(title, self.font_big, (255, 230, 120), SCREEN_WIDTH // 2, 180, center=True)
+        self._draw_text(subtitle, self.font_mid, (255, 255, 255), SCREEN_WIDTH // 2, 245, center=True)
+
+        money = self.player.money if self.player else 0
+        orders = self.player.orders if self.player else 0
+
+        box = pygame.Rect(SCREEN_WIDTH // 2 - 300, 300, 600, 220)
+        self._draw_panel(box, alpha=170, border=True)
+
+        lines = [
+            f"Winner: {self.winner_name}",
+            f"Time: {self.elapsed_time:.1f}s",
+            f"Player money: ${money}/{self.settings.target_revenue}",
+            f"Player orders: {orders}",
+            "Result saved to stats.csv",
+            "ENTER: Chơi lại | ESC: Về menu",
+        ]
+
+        y = 325
+
+        for line in lines:
+            self._draw_text(line, self.font_small, (245, 245, 245), SCREEN_WIDTH // 2, y, center=True)
+            y += 32
+
+    def _draw_text(self, text: str, font: pygame.font.Font, color: Tuple[int, int, int], x: int, y: int, center: bool = False) -> None:
+        surface = font.render(str(text), True, color)
+        rect = surface.get_rect()
+
+        if center:
+            rect.center = (x, y)
+        else:
+            rect.topleft = (x, y)
+
+        self.screen.blit(surface, rect)
+
+    def _reset_game(self) -> None:
+        self.elapsed_time = 0.0
+        self.result_logged = False
+        self.winner_name = ""
+        self.auto_player_enabled = False
+
+        self._create_shipper_objects()
+
+        self.player_task = self._new_task("Player")
+        self.npc_tasks = {}
+        self.npc_paths = {}
+        self.npc_expanded = {}
+
+        if self.player:
+            self.player.money = 0
+            self.player.orders = 0
+            self.player.set_grid_pos(self._nearest_walkable(self.player_spawn))
+
+        for npc in self.npc_shippers:
+            npc.money = 0
+            npc.orders = 0
+
+        self._refresh_player_path_hint()
