@@ -1,0 +1,223 @@
+from __future__ import annotations
+
+import math
+from typing import Any
+
+import pygame
+
+
+class DirectionalShipper:
+    """
+    Shipper dùng cho Super Delivery Game.
+
+    Class này tương thích với cả code cũ và code mới:
+    - update_smooth(dt)
+    - update(dt)
+    - move_grid(dx, dy, max_cols, max_rows, min_y=0)
+    - move_to_grid(pos)
+    - set_grid_pos(pos)
+    - set_grid_position(pos)
+    - render_pos
+    - grid_pos
+
+    Mục tiêu:
+    - Di chuyển mượt.
+    - Không teleport xa.
+    - Không bay xuyên tường do target nhảy nhiều ô.
+    """
+
+    def __init__(
+        self,
+        name: str = "Shipper",
+        grid_pos: tuple[int, int] = (0, 0),
+        sprites: dict[str, pygame.Surface] | None = None,
+        tile_size: int | tuple[int, int, int] = 32,
+        color: tuple[int, int, int] = (255, 200, 40),
+        algorithm: str = "",
+        speed_px: float = 115.0,
+        **kwargs: Any,
+    ):
+        self.name = name
+
+        # Tương thích nếu tham số thứ 4 bị truyền là color thay vì tile_size.
+        if isinstance(tile_size, tuple):
+            color = tile_size
+            tile_size = int(kwargs.get("tile_size", 32))
+
+        self.tile_size = int(tile_size)
+        self.color = color
+        self.sprites = sprites or {}
+        self.algorithm = algorithm or kwargs.get("algorithm", "ASTAR")
+
+        self._grid_pos = (int(grid_pos[0]), int(grid_pos[1]))
+        self.target_grid_pos = self._grid_pos
+
+        self.pixel_x = float(self._grid_pos[0] * self.tile_size)
+        self.pixel_y = float(self._grid_pos[1] * self.tile_size)
+
+        self.speed_px = float(kwargs.get("speed", speed_px))
+        self.speed_px = max(45.0, min(self.speed_px, 145.0))
+
+        self.direction = "down"
+        self.is_moving = False
+
+        self.money = int(kwargs.get("money", 0))
+        self.orders = int(kwargs.get("orders", 0))
+        self.expanded_nodes = int(kwargs.get("expanded_nodes", 0))
+
+    @property
+    def grid_pos(self) -> tuple[int, int]:
+        return self._grid_pos
+
+    @grid_pos.setter
+    def grid_pos(self, value: tuple[int, int]) -> None:
+        self.set_grid_position(value)
+
+    @property
+    def render_pos(self) -> tuple[float, float]:
+        """
+        Trả về tọa độ render theo đơn vị grid.
+        game_manager._draw_shipper_scaled dùng hàm này.
+        """
+        return (self.pixel_x / self.tile_size, self.pixel_y / self.tile_size)
+
+    @property
+    def pixel_pos(self) -> tuple[float, float]:
+        return (self.pixel_x, self.pixel_y)
+
+    def set_direction_from_delta(self, dx: int, dy: int) -> None:
+        if dx > 0:
+            self.direction = "right"
+        elif dx < 0:
+            self.direction = "left"
+        elif dy > 0:
+            self.direction = "down"
+        elif dy < 0:
+            self.direction = "up"
+
+    def set_grid_position(self, pos: tuple[int, int]) -> None:
+        pos = (int(pos[0]), int(pos[1]))
+        self._grid_pos = pos
+        self.target_grid_pos = pos
+        self.pixel_x = float(pos[0] * self.tile_size)
+        self.pixel_y = float(pos[1] * self.tile_size)
+        self.is_moving = False
+
+    def set_grid_pos(self, pos: tuple[int, int]) -> None:
+        self.set_grid_position(pos)
+
+    def teleport_to_grid(self, pos: tuple[int, int]) -> None:
+        self.set_grid_position(pos)
+
+    def move_grid(
+        self,
+        dx: int,
+        dy: int,
+        max_cols: int,
+        max_rows: int,
+        min_y: int = 0,
+    ) -> bool:
+        """
+        Di chuyển 1 ô theo grid.
+        Hàm này được game_manager hiện tại gọi.
+
+        Lưu ý:
+        - Nếu đang trượt tới ô kế tiếp thì không nhận thêm bước mới.
+        - Chỉ nhận hướng 4 chiều.
+        """
+        dx = int(dx)
+        dy = int(dy)
+
+        if abs(dx) + abs(dy) != 1:
+            return False
+
+        if self.is_moving:
+            return False
+
+        self.set_direction_from_delta(dx, dy)
+
+        x, y = self._grid_pos
+        nx = max(0, min(int(max_cols) - 1, x + dx))
+        ny = max(int(min_y), min(int(max_rows) - 1, y + dy))
+
+        if (nx, ny) == self._grid_pos:
+            return False
+
+        return self.move_to_grid((nx, ny))
+
+    def move_to_grid(self, pos: tuple[int, int]) -> bool:
+        """
+        Di chuyển đến ô grid kề cạnh.
+        Chặn teleport nếu target cách xa hơn 1 ô.
+        """
+        pos = (int(pos[0]), int(pos[1]))
+
+        if self.is_moving:
+            return False
+
+        dx = pos[0] - self._grid_pos[0]
+        dy = pos[1] - self._grid_pos[1]
+
+        if abs(dx) + abs(dy) != 1:
+            return False
+
+        self.set_direction_from_delta(dx, dy)
+        self.target_grid_pos = pos
+        self.is_moving = True
+        return True
+
+    def update(self, dt: float) -> None:
+        if not self.is_moving:
+            return
+
+        target_x = self.target_grid_pos[0] * self.tile_size
+        target_y = self.target_grid_pos[1] * self.tile_size
+
+        dx = target_x - self.pixel_x
+        dy = target_y - self.pixel_y
+        dist = math.hypot(dx, dy)
+
+        step = self.speed_px * float(dt)
+
+        if dist <= step or dist <= 0.01:
+            self.pixel_x = float(target_x)
+            self.pixel_y = float(target_y)
+            self._grid_pos = self.target_grid_pos
+            self.is_moving = False
+            return
+
+        self.pixel_x += dx / dist * step
+        self.pixel_y += dy / dist * step
+
+    def update_smooth(self, dt: float) -> None:
+        """
+        Alias để tương thích với game_manager.py cũ.
+        """
+        self.update(dt)
+
+    def draw(self, screen: pygame.Surface, *args: Any, **kwargs: Any) -> None:
+        sprite = self._current_sprite()
+        x = int(round(self.pixel_x))
+        y = int(round(self.pixel_y))
+
+        if sprite:
+            rect = sprite.get_rect()
+            rect.center = (x + self.tile_size // 2, y + self.tile_size // 2)
+            screen.blit(sprite, rect)
+            return
+
+        rect = pygame.Rect(x + 4, y + 4, self.tile_size - 8, self.tile_size - 8)
+        pygame.draw.ellipse(screen, self.color, rect)
+        pygame.draw.ellipse(screen, (20, 20, 20), rect, width=2)
+
+    def _current_sprite(self) -> pygame.Surface | None:
+        if self.direction in self.sprites:
+            return self.sprites[self.direction]
+
+        if "idle" in self.sprites:
+            return self.sprites["idle"]
+
+        if "right" in self.sprites:
+            return self.sprites["right"]
+
+        return None
