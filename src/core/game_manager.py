@@ -1502,3 +1502,520 @@ class GameManager:
             npc.orders = 0
 
         self._refresh_player_path_hint()
+
+
+
+# =========================================================
+# LETTERBOX DISPLAY PATCH
+# Giữ world 1536x1024 nhưng hiển thị fit trong cửa sổ 1408x736.
+# Không crop map, không phóng to map quá màn hình.
+# =========================================================
+
+try:
+    _SUPER_DELIVERY_ORIGINAL_DRAW = GameManager._draw
+except Exception:
+    _SUPER_DELIVERY_ORIGINAL_DRAW = None
+
+
+def _super_delivery_present_letterbox(self, world_surface):
+    display = pygame.display.get_surface()
+    if display is None:
+        return
+
+    win_w, win_h = display.get_size()
+    world_w, world_h = world_surface.get_size()
+
+    scale = min(win_w / world_w, win_h / world_h)
+    scaled_w = max(1, int(world_w * scale))
+    scaled_h = max(1, int(world_h * scale))
+
+    offset_x = (win_w - scaled_w) // 2
+    offset_y = (win_h - scaled_h) // 2
+
+    self._viewport_scale = scale
+    self._viewport_offset = (offset_x, offset_y)
+
+    display.fill((0, 0, 0))
+    scaled = pygame.transform.smoothscale(world_surface, (scaled_w, scaled_h))
+    display.blit(scaled, (offset_x, offset_y))
+    pygame.display.flip()
+
+
+def _super_delivery_draw_letterboxed(self):
+    world_size = (1536, 1024)
+
+    if not hasattr(self, "_letterbox_world_surface"):
+        self._letterbox_world_surface = pygame.Surface(world_size).convert()
+
+    display_screen = self.screen
+    self.screen = self._letterbox_world_surface
+    self._letterbox_world_surface.fill((0, 0, 0))
+
+    if _SUPER_DELIVERY_ORIGINAL_DRAW is not None:
+        _SUPER_DELIVERY_ORIGINAL_DRAW(self)
+
+    self.screen = display_screen
+    _super_delivery_present_letterbox(self, self._letterbox_world_surface)
+
+
+try:
+    if _SUPER_DELIVERY_ORIGINAL_DRAW is not None and not getattr(GameManager, "_letterbox_patch_applied", False):
+        GameManager._draw = _super_delivery_draw_letterboxed
+        GameManager._letterbox_patch_applied = True
+except Exception as exc:
+    print(f"[WARN] Letterbox patch failed: {exc}")
+
+
+try:
+    _SUPER_DELIVERY_ORIGINAL_HANDLE_MOUSE_CLICK = GameManager._handle_mouse_click
+
+    def _super_delivery_handle_mouse_click_letterbox(self, pos):
+        scale = getattr(self, "_viewport_scale", 1.0)
+        offset_x, offset_y = getattr(self, "_viewport_offset", (0, 0))
+
+        if scale and scale > 0:
+            x = int((pos[0] - offset_x) / scale)
+            y = int((pos[1] - offset_y) / scale)
+            pos = (x, y)
+
+        return _SUPER_DELIVERY_ORIGINAL_HANDLE_MOUSE_CLICK(self, pos)
+
+    if not getattr(GameManager, "_letterbox_mouse_patch_applied", False):
+        GameManager._handle_mouse_click = _super_delivery_handle_mouse_click_letterbox
+        GameManager._letterbox_mouse_patch_applied = True
+
+except Exception:
+    pass
+
+
+
+
+# =========================================================
+# PATH ALIGNMENT + PICKUP FREEZE PATCH
+# =========================================================
+
+def _sdg_normalize_path_for_current_pos(self):
+    """
+    Remove repeated current-cell at the beginning of path arrays.
+    This prevents auto movement from freezing after pickup.
+    """
+    try:
+        current = tuple(self.player.grid_pos)
+    except Exception:
+        return
+
+    for attr in ("player_path", "player_path_hint", "path_hint"):
+        path = getattr(self, attr, None)
+
+        if isinstance(path, list):
+            while path and tuple(path[0]) == current:
+                path.pop(0)
+
+            setattr(self, attr, path)
+
+
+try:
+    _SDG_ORIGINAL_REFRESH_PATH_HINT = GameManager._refresh_player_path_hint
+
+    def _sdg_refresh_player_path_hint_fixed(self, *args, **kwargs):
+        result = _SDG_ORIGINAL_REFRESH_PATH_HINT(self, *args, **kwargs)
+        _sdg_normalize_path_for_current_pos(self)
+        return result
+
+    if not getattr(GameManager, "_sdg_refresh_path_patch_applied", False):
+        GameManager._refresh_player_path_hint = _sdg_refresh_player_path_hint_fixed
+        GameManager._sdg_refresh_path_patch_applied = True
+
+except Exception:
+    pass
+
+
+try:
+    _SDG_ORIGINAL_UPDATE_SMOOTH_ENTITIES = GameManager._update_smooth_entities
+
+    def _sdg_update_smooth_entities_fixed(self, dt):
+        _sdg_normalize_path_for_current_pos(self)
+        return _SDG_ORIGINAL_UPDATE_SMOOTH_ENTITIES(self, dt)
+
+    if not getattr(GameManager, "_sdg_update_smooth_patch_applied", False):
+        GameManager._update_smooth_entities = _sdg_update_smooth_entities_fixed
+        GameManager._sdg_update_smooth_patch_applied = True
+
+except Exception:
+    pass
+
+
+try:
+    _SDG_ORIGINAL_DRAW_SHIPPER_SCALED = GameManager._draw_shipper_scaled
+
+    def _sdg_draw_shipper_scaled_centered(self, shipper, *args, **kwargs):
+        """
+        Force shipper sprite to render at the center of its grid cell.
+        If anything fails, fall back to original draw method.
+        """
+        try:
+            tile_size = globals().get("TILE_SIZE", 32)
+
+            center_x = int(round(shipper.pixel_x + tile_size / 2))
+            center_y = int(round(shipper.pixel_y + tile_size / 2))
+
+            sprite = None
+
+            if hasattr(shipper, "_current_sprite"):
+                sprite = shipper._current_sprite()
+
+            if sprite is None and hasattr(shipper, "sprites"):
+                sprite = (
+                    shipper.sprites.get(getattr(shipper, "direction", "down"))
+                    or shipper.sprites.get("idle")
+                    or shipper.sprites.get("right")
+                    or shipper.sprites.get("down")
+                )
+
+            if sprite is not None:
+                # Keep sprite readable but not too large.
+                max_size = int(tile_size * 1.25)
+                w, h = sprite.get_size()
+
+                if w > max_size or h > max_size:
+                    ratio = min(max_size / w, max_size / h)
+                    sprite = pygame.transform.smoothscale(
+                        sprite,
+                        (max(1, int(w * ratio)), max(1, int(h * ratio))),
+                    )
+
+                rect = sprite.get_rect(center=(center_x, center_y))
+                self.screen.blit(sprite, rect)
+                return
+
+        except Exception:
+            pass
+
+        return _SDG_ORIGINAL_DRAW_SHIPPER_SCALED(self, shipper, *args, **kwargs)
+
+    if not getattr(GameManager, "_sdg_draw_shipper_center_patch_applied", False):
+        GameManager._draw_shipper_scaled = _sdg_draw_shipper_scaled_centered
+        GameManager._sdg_draw_shipper_center_patch_applied = True
+
+except Exception:
+    pass
+
+
+
+
+# =========================================================
+# AUTO PATH STEP FIX
+# - Player only follows path when auto_player_enabled = True.
+# - NPCs always try to follow their path.
+# - Removes current-cell duplicates at the beginning of paths.
+# - If a path step is not adjacent, recalculates a small BFS path on the grid.
+# =========================================================
+
+from collections import deque
+
+def _sdg_entity_current(entity):
+    try:
+        return tuple(entity.grid_pos)
+    except Exception:
+        return None
+
+
+def _sdg_is_adjacent(a, b):
+    if a is None or b is None:
+        return False
+
+    return abs(int(a[0]) - int(b[0])) + abs(int(a[1]) - int(b[1])) == 1
+
+
+def _sdg_is_walkable_cell(code):
+    # Current TMX convention:
+    # 0 road, 2 store, 3 house, 4 trap, 6 bridge, 7 roundabout are walkable.
+    # 1 is blocked.
+    return code in (0, 2, 3, 4, 6, 7)
+
+
+def _sdg_get_grid(self):
+    for attr in ("grid", "map_grid", "current_grid"):
+        grid = getattr(self, attr, None)
+
+        if isinstance(grid, list) and grid and isinstance(grid[0], list):
+            return grid
+
+    for attr in ("map_data", "tmx_data", "current_map", "game_map"):
+        data = getattr(self, attr, None)
+
+        if data is None:
+            continue
+
+        grid = getattr(data, "grid", None)
+
+        if isinstance(grid, list) and grid and isinstance(grid[0], list):
+            return grid
+
+    return None
+
+
+def _sdg_bfs_next_path(self, start, goal):
+    grid = _sdg_get_grid(self)
+
+    if not grid:
+        return []
+
+    h = len(grid)
+    w = len(grid[0])
+
+    start = (int(start[0]), int(start[1]))
+    goal = (int(goal[0]), int(goal[1]))
+
+    if not (0 <= start[0] < w and 0 <= start[1] < h):
+        return []
+
+    if not (0 <= goal[0] < w and 0 <= goal[1] < h):
+        return []
+
+    if not _sdg_is_walkable_cell(grid[goal[1]][goal[0]]):
+        return []
+
+    q = deque([start])
+    parent = {start: None}
+
+    while q:
+        x, y = q.popleft()
+
+        if (x, y) == goal:
+            break
+
+        for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+            if not (0 <= nx < w and 0 <= ny < h):
+                continue
+
+            if (nx, ny) in parent:
+                continue
+
+            if not _sdg_is_walkable_cell(grid[ny][nx]):
+                continue
+
+            parent[(nx, ny)] = (x, y)
+            q.append((nx, ny))
+
+    if goal not in parent:
+        return []
+
+    path = []
+    cur = goal
+
+    while cur is not None:
+        path.append(cur)
+        cur = parent[cur]
+
+    path.reverse()
+    return path
+
+
+def _sdg_clean_and_step_path(self, entity, path):
+    if entity is None or path is None:
+        return False
+
+    if not isinstance(path, list):
+        return False
+
+    current = _sdg_entity_current(entity)
+
+    if current is None:
+        return False
+
+    # Remove repeated current cell at the beginning.
+    while path and tuple(path[0]) == current:
+        path.pop(0)
+
+    if not path:
+        return False
+
+    next_pos = tuple(path[0])
+
+    # If next step is not adjacent, rebuild path to the target.
+    if not _sdg_is_adjacent(current, next_pos):
+        target = tuple(path[-1])
+        rebuilt = _sdg_bfs_next_path(self, current, target)
+
+        if rebuilt:
+            path[:] = rebuilt
+
+            while path and tuple(path[0]) == current:
+                path.pop(0)
+
+            if not path:
+                return False
+
+            next_pos = tuple(path[0])
+
+    if not _sdg_is_adjacent(current, next_pos):
+        return False
+
+    if getattr(entity, "is_moving", False):
+        return False
+
+    moved = False
+
+    if hasattr(entity, "move_to_grid"):
+        moved = bool(entity.move_to_grid(next_pos))
+    elif hasattr(entity, "move_to"):
+        moved = bool(entity.move_to(next_pos))
+
+    if moved:
+        # Remove command step immediately after movement starts.
+        if path and tuple(path[0]) == next_pos:
+            path.pop(0)
+
+    return moved
+
+
+def _sdg_get_player_path(self):
+    for attr in (
+        "player_path",
+        "player_path_hint",
+        "path_hint",
+        "current_player_path",
+        "auto_player_path",
+    ):
+        path = getattr(self, attr, None)
+
+        if isinstance(path, list):
+            return path
+
+    return None
+
+
+def _sdg_get_npc_path(self, npc):
+    name = getattr(npc, "name", None)
+
+    # Common dictionary path storage.
+    for attr in (
+        "npc_paths",
+        "npc_path_hints",
+        "npc_routes",
+        "npc_path",
+        "npc_current_paths",
+    ):
+        data = getattr(self, attr, None)
+
+        if isinstance(data, dict):
+            for key in (name, npc):
+                if key in data and isinstance(data[key], list):
+                    return data[key]
+
+    # Rare direct list on npc object.
+    for attr in ("path", "route", "current_path"):
+        path = getattr(npc, attr, None)
+
+        if isinstance(path, list):
+            return path
+
+    # Last fallback: scan dictionaries with "path" in name.
+    for attr, data in self.__dict__.items():
+        if "path" not in attr.lower():
+            continue
+
+        if isinstance(data, dict):
+            for key in (name, npc):
+                if key in data and isinstance(data[key], list):
+                    return data[key]
+
+    return None
+
+
+try:
+    _SDG_ORIGINAL_UPDATE_SMOOTH_ENTITIES_AUTOSTEP = GameManager._update_smooth_entities
+
+    def _sdg_update_smooth_entities_autostep(self, dt):
+        # Run original logic first, so pickup/delivery/stats still work.
+        result = _SDG_ORIGINAL_UPDATE_SMOOTH_ENTITIES_AUTOSTEP(self, dt)
+
+        # Player auto movement only works when SPACE / auto mode is enabled.
+        if getattr(self, "auto_player_enabled", False):
+            player = getattr(self, "player", None)
+            player_path = _sdg_get_player_path(self)
+
+            if player is not None and player_path is not None:
+                _sdg_clean_and_step_path(self, player, player_path)
+
+        # NPC movement should always run.
+        for npc in getattr(self, "npc_shippers", []):
+            npc_path = _sdg_get_npc_path(self, npc)
+
+            if npc_path is not None:
+                _sdg_clean_and_step_path(self, npc, npc_path)
+
+        return result
+
+    if not getattr(GameManager, "_sdg_auto_step_patch_applied", False):
+        GameManager._update_smooth_entities = _sdg_update_smooth_entities_autostep
+        GameManager._sdg_auto_step_patch_applied = True
+
+except Exception as exc:
+    print(f"[WARN] Auto path step patch failed: {exc}")
+
+
+# Make sure path refresh removes current cell.
+try:
+    _SDG_ORIGINAL_REFRESH_PLAYER_PATH_AUTOSTEP = GameManager._refresh_player_path_hint
+
+    def _sdg_refresh_player_path_hint_autostep(self, *args, **kwargs):
+        result = _SDG_ORIGINAL_REFRESH_PLAYER_PATH_AUTOSTEP(self, *args, **kwargs)
+        path = _sdg_get_player_path(self)
+        player = getattr(self, "player", None)
+
+        if player is not None and isinstance(path, list):
+            current = _sdg_entity_current(player)
+
+            while path and tuple(path[0]) == current:
+                path.pop(0)
+
+        return result
+
+    if not getattr(GameManager, "_sdg_refresh_player_path_autostep_patch_applied", False):
+        GameManager._refresh_player_path_hint = _sdg_refresh_player_path_hint_autostep
+        GameManager._sdg_refresh_player_path_autostep_patch_applied = True
+
+except Exception:
+    pass
+
+
+
+
+# =========================================================
+# NPC SMOOTH QUEUE PATCH
+# This patch prevents NPCs from stuttering by avoiding repeated
+# step rejection while they are already moving.
+# =========================================================
+
+def _sdg_npc_smooth_clear_bad_queue(self):
+    try:
+        for npc in getattr(self, "npc_shippers", []):
+            if hasattr(npc, "queued_grid_pos"):
+                q = getattr(npc, "queued_grid_pos", None)
+
+                if q is not None and getattr(npc, "target_grid_pos", None) is not None:
+                    tx, ty = npc.target_grid_pos
+                    qx, qy = q
+
+                    if abs(int(qx) - int(tx)) + abs(int(qy) - int(ty)) != 1:
+                        npc.queued_grid_pos = None
+    except Exception:
+        pass
+
+
+try:
+    _SDG_ORIGINAL_UPDATE_SMOOTH_NPC_QUEUE = GameManager._update_smooth_entities
+
+    def _sdg_update_smooth_entities_npc_queue(self, dt):
+        _sdg_npc_smooth_clear_bad_queue(self)
+        return _SDG_ORIGINAL_UPDATE_SMOOTH_NPC_QUEUE(self, dt)
+
+    if not getattr(GameManager, "_sdg_npc_queue_patch_applied", False):
+        GameManager._update_smooth_entities = _sdg_update_smooth_entities_npc_queue
+        GameManager._sdg_npc_queue_patch_applied = True
+
+except Exception as exc:
+    print(f"[WARN] NPC smooth queue patch failed: {exc}")
+

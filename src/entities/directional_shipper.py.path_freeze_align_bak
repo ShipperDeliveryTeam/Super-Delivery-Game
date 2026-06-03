@@ -8,14 +8,23 @@ import pygame
 
 class DirectionalShipper:
     """
-    Smooth grid shipper for Super Delivery Game.
+    DirectionalShipper compatibility class for Super Delivery Game.
 
-    Fixes NPC stutter:
-    - If a new adjacent step is requested while the shipper is still moving,
-      it is queued instead of being rejected.
-    - When the shipper reaches the current target cell, it immediately starts
-      the queued next step.
-    - Normal movement still only allows adjacent grid cells.
+    This version keeps the current game_manager.py compatible:
+    - set_direction_from_delta(dx, dy)
+    - update_smooth(dt)
+    - update(dt)
+    - move_grid(dx, dy, max_cols, max_rows, min_y=0)
+    - move_to_grid(pos)
+    - set_grid_pos(pos)
+    - set_grid_position(pos)
+    - teleport_to_grid(pos)
+    - render_pos
+    - grid_pos
+
+    Movement rule:
+    - Only one adjacent grid cell per move.
+    - No long-distance teleport during normal movement.
     """
 
     def __init__(self, name="Shipper", grid_pos=(0, 0), sprites=None, *args, **kwargs):
@@ -25,9 +34,11 @@ class DirectionalShipper:
         self.tile_size = int(kwargs.get("tile_size", 32))
         self.color = kwargs.get("color", (255, 200, 40))
         self.algorithm = kwargs.get("algorithm", "")
-        self.speed_px = float(kwargs.get("speed", kwargs.get("speed_px", 118.0)))
+        self.speed_px = float(kwargs.get("speed", kwargs.get("speed_px", 105.0)))
 
-        # Compatibility with old constructor call styles.
+        # Compatibility with older constructor call styles:
+        # DirectionalShipper(name, pos, sprites, color, algorithm, tile_size)
+        # DirectionalShipper(name, pos, sprites, tile_size, color, algorithm)
         for arg in args:
             if isinstance(arg, tuple) and len(arg) >= 3:
                 self.color = arg[:3]
@@ -39,12 +50,10 @@ class DirectionalShipper:
                 else:
                     self.speed_px = float(arg)
 
-        # Keep movement readable but not sluggish.
-        self.speed_px = max(70.0, min(float(self.speed_px), 150.0))
+        self.speed_px = max(45.0, min(float(self.speed_px), 125.0))
 
         self._grid_pos = (int(grid_pos[0]), int(grid_pos[1]))
         self.target_grid_pos = self._grid_pos
-        self.queued_grid_pos = None
 
         self.pixel_x = float(self._grid_pos[0] * self.tile_size)
         self.pixel_y = float(self._grid_pos[1] * self.tile_size)
@@ -77,25 +86,12 @@ class DirectionalShipper:
 
     @property
     def render_pos(self):
+        # Return render position in grid units. Existing game_manager uses this.
         return (self.pixel_x / self.tile_size, self.pixel_y / self.tile_size)
-
-    @property
-    def center_render_pos(self):
-        return (
-            self.pixel_x / self.tile_size + 0.5,
-            self.pixel_y / self.tile_size + 0.5,
-        )
 
     @property
     def pixel_pos(self):
         return (self.pixel_x, self.pixel_y)
-
-    @property
-    def center_pixel_pos(self):
-        return (
-            self.pixel_x + self.tile_size / 2,
-            self.pixel_y + self.tile_size / 2,
-        )
 
     @property
     def x(self):
@@ -109,6 +105,9 @@ class DirectionalShipper:
     # Direction helpers
     # =====================================================
     def set_direction_from_delta(self, dx, dy):
+        """
+        Required by current game_manager.py.
+        """
         dx = int(dx)
         dy = int(dy)
 
@@ -131,7 +130,6 @@ class DirectionalShipper:
         pos = (int(pos[0]), int(pos[1]))
         self._grid_pos = pos
         self.target_grid_pos = pos
-        self.queued_grid_pos = None
         self.pixel_x = float(pos[0] * self.tile_size)
         self.pixel_y = float(pos[1] * self.tile_size)
         self.is_moving = False
@@ -148,63 +146,47 @@ class DirectionalShipper:
     def stop(self):
         self.is_moving = False
         self.target_grid_pos = self._grid_pos
-        self.queued_grid_pos = None
         self.pixel_x = float(self._grid_pos[0] * self.tile_size)
         self.pixel_y = float(self._grid_pos[1] * self.tile_size)
 
     # =====================================================
     # Movement
     # =====================================================
-    def _is_adjacent(self, a, b):
-        return abs(int(a[0]) - int(b[0])) + abs(int(a[1]) - int(b[1])) == 1
-
     def move_grid(self, dx, dy, max_cols, max_rows, min_y=0):
+        """
+        Move one cell by delta. Used by keyboard movement.
+        """
         dx = int(dx)
         dy = int(dy)
 
         if abs(dx) + abs(dy) != 1:
             return False
 
-        # If currently moving, queue from current target.
-        base = self.target_grid_pos if self.is_moving else self._grid_pos
+        if self.is_moving:
+            return False
 
-        nx = max(0, min(int(max_cols) - 1, base[0] + dx))
-        ny = max(int(min_y), min(int(max_rows) - 1, base[1] + dy))
+        x, y = self._grid_pos
+        nx = max(0, min(int(max_cols) - 1, x + dx))
+        ny = max(int(min_y), min(int(max_rows) - 1, y + dy))
 
-        if (nx, ny) == base:
-            return True
+        if (nx, ny) == self._grid_pos:
+            return False
 
         return self.move_to_grid((nx, ny))
 
     def move_to_grid(self, pos):
         """
-        Move/queue one adjacent grid cell.
+        Move to one adjacent grid cell.
         """
         pos = (int(pos[0]), int(pos[1]))
 
-        # Current cell: not an error. Return True so path code can consume it.
-        if pos == self._grid_pos and not self.is_moving:
-            return True
-
         if self.is_moving:
-            # Already heading there.
-            if pos == self.target_grid_pos:
-                return True
-
-            # Queue next step if it is adjacent to the current target.
-            if self._is_adjacent(self.target_grid_pos, pos):
-                self.queued_grid_pos = pos
-                return True
-
-            # If path code sends current cell while moving, accept but do nothing.
-            if pos == self._grid_pos:
-                return True
-
             return False
 
         dx = pos[0] - self._grid_pos[0]
         dy = pos[1] - self._grid_pos[1]
 
+        # Prevent teleport / wall crossing.
         if abs(dx) + abs(dy) != 1:
             return False
 
@@ -213,29 +195,12 @@ class DirectionalShipper:
         self.is_moving = True
         return True
 
+    # Compatibility aliases
     def move_to(self, pos):
         return self.move_to_grid(pos)
 
     def start_move_to(self, pos):
         return self.move_to_grid(pos)
-
-    def _begin_queued_move_if_any(self):
-        if self.queued_grid_pos is None:
-            return False
-
-        next_pos = self.queued_grid_pos
-        self.queued_grid_pos = None
-
-        if not self._is_adjacent(self._grid_pos, next_pos):
-            return False
-
-        dx = next_pos[0] - self._grid_pos[0]
-        dy = next_pos[1] - self._grid_pos[1]
-
-        self.set_direction_from_delta(dx, dy)
-        self.target_grid_pos = next_pos
-        self.is_moving = True
-        return True
 
     def update(self, dt):
         if not self.is_moving:
@@ -255,15 +220,15 @@ class DirectionalShipper:
             self.pixel_y = float(target_y)
             self._grid_pos = self.target_grid_pos
             self.is_moving = False
-
-            # Important: continue immediately if a next step was queued.
-            self._begin_queued_move_if_any()
             return
 
         self.pixel_x += dx / dist * step
         self.pixel_y += dy / dist * step
 
     def update_smooth(self, dt):
+        """
+        Required by current game_manager.py.
+        """
         self.update(dt)
 
     # =====================================================
@@ -271,16 +236,17 @@ class DirectionalShipper:
     # =====================================================
     def draw(self, screen, *args, **kwargs):
         sprite = self._current_sprite()
-        center_x = int(round(self.pixel_x + self.tile_size / 2))
-        center_y = int(round(self.pixel_y + self.tile_size / 2))
+
+        x = int(round(self.pixel_x))
+        y = int(round(self.pixel_y))
 
         if sprite:
-            rect = sprite.get_rect(center=(center_x, center_y))
+            rect = sprite.get_rect()
+            rect.center = (x + self.tile_size // 2, y + self.tile_size // 2)
             screen.blit(sprite, rect)
             return
 
-        rect = pygame.Rect(0, 0, self.tile_size - 8, self.tile_size - 8)
-        rect.center = (center_x, center_y)
+        rect = pygame.Rect(x + 4, y + 4, self.tile_size - 8, self.tile_size - 8)
         pygame.draw.ellipse(screen, self.color, rect)
         pygame.draw.ellipse(screen, (20, 20, 20), rect, width=2)
 

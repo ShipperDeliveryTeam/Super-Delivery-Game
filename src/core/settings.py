@@ -39,8 +39,8 @@ class GameSettings:
 
     available_algorithms: List[str] = field(default_factory=lambda: list(ALGORITHMS))
 
-    def get_window_size(self) -> Tuple[int, int]:
-        return self.window_width, self.window_height
+    def get_window_size(self):
+        return (1408, 736)
 
     def set_map(self, map_id: int) -> None:
         try:
