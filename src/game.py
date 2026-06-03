@@ -1,6 +1,7 @@
 # pyrefly: ignore [missing-import]
 import os
 import sys
+import ctypes
 
 # pyrefly: ignore [missing-import]
 import pygame
@@ -45,9 +46,22 @@ class Game:
         self.world_height = self.rows * self.tile_size
         self.world_surface = pygame.Surface((self.world_width, self.world_height)).convert()
 
-        # Nếu map lớn hơn màn hình máy, tự thu nhỏ cửa sổ nhưng giữ đúng tỉ lệ.
-        self.window_width, self.window_height = self.calculate_window_size()
-        self.screen = pygame.display.set_mode((self.window_width, self.window_height))
+        # Tạo cửa sổ cho phép kéo giãn (RESIZABLE)
+        info = pygame.display.Info()
+        self.window_width = int(info.current_w * 0.85)
+        self.window_height = int(info.current_h * 0.85)
+        self.screen = pygame.display.set_mode((self.window_width, self.window_height), pygame.RESIZABLE)
+        
+        # Ép buộc hệ điều hành Windows Cực đại hóa (Maximize) cửa sổ
+        try:
+            hwnd = pygame.display.get_wm_info()["window"]
+            ctypes.windll.user32.ShowWindow(hwnd, 3) # 3 = SW_MAXIMIZE
+            pygame.event.pump() # Bắt buộc Pygame cập nhật sự kiện thay đổi kích thước
+            self.window_width, self.window_height = self.screen.get_size()
+        except Exception as e:
+            print("Cảnh báo: Không thể maximize cửa sổ bằng ctypes:", e)
+
+        self._recalculate_scale()
 
         self.path = []
         self.visited = set()
@@ -65,13 +79,13 @@ class Game:
         self.manual_mode = False
         self.move_timer = 0
 
-    def calculate_window_size(self):
-        info = pygame.display.Info()
-        max_w = max(640, int(info.current_w * MAX_WINDOW_RATIO))
-        max_h = max(480, int(info.current_h * MAX_WINDOW_RATIO))
-
-        scale = min(max_w / self.world_width, max_h / self.world_height, 1.0)
-        return int(self.world_width * scale), int(self.world_height * scale)
+    def _recalculate_scale(self):
+        # Tính toán tỷ lệ để vẽ map nằm giữa màn hình, hỗ trợ upscale và downscale
+        scale = min(self.window_width / self.world_width, self.window_height / self.world_height)
+        self.drawn_width = int(self.world_width * scale)
+        self.drawn_height = int(self.world_height * scale)
+        self.offset_x = (self.window_width - self.drawn_width) // 2
+        self.offset_y = (self.window_height - self.drawn_height) // 2
 
     def load_map(self, file_path):
         self.map_file = file_path
@@ -126,37 +140,31 @@ class Game:
         self.map_bg = self.load_background_from_tmx(file_path)
 
     def load_background_from_tmx(self, file_path):
-        """Lấy ảnh nền từ tileset image trong TMX.
-
-        File map1.tmx đang dùng ảnh ../assets/images/map/map1.png làm tileset image.
-        Ta dùng chính ảnh này làm background gốc để không bị lệch grid.
+        """Lấy ảnh nền cho map hiện tại.
+        
+        Thay vì lấy từ tileset (vì tileset chỉ là ảnh nhỏ chứa tile),
+        ta sẽ tìm ảnh cùng tên với map (vd: map1.tmx -> map1.png) trong thư mục assets/images/map.
         """
-        map_dir = os.path.dirname(file_path)
+        map_name = os.path.splitext(os.path.basename(file_path))[0]
+        image_name = map_name + ".png"
+        
+        # C:\AI\Super-Delivery-Game\assets\images\map
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        image_path = os.path.join(project_root, "assets", "images", "map", image_name)
+        
         expected_size = (self.cols * self.tile_size, self.rows * self.tile_size)
+        
+        if os.path.exists(image_path):
+            bg = pygame.image.load(image_path).convert()
+            if bg.get_size() != expected_size:
+                print(
+                    "WARNING: Kích thước ảnh map không khớp TMX: "
+                    f"ảnh={bg.get_size()}, TMX={expected_size}. "
+                    "Game sẽ không scale ảnh để tránh lệch tọa độ. "
+                )
+            return bg
 
-        for tileset in self.tmx_data.tilesets:
-            source = getattr(tileset, "source", None)
-            if not source:
-                source = getattr(tileset, "image", None)
-            if not source:
-                continue
-
-            image_path = source
-            if not os.path.isabs(image_path):
-                image_path = os.path.normpath(os.path.join(map_dir, image_path))
-
-            if os.path.exists(image_path):
-                bg = pygame.image.load(image_path).convert()
-                if bg.get_size() != expected_size:
-                    print(
-                        "WARNING: Kích thước ảnh map không khớp TMX: "
-                        f"ảnh={bg.get_size()}, TMX={expected_size}. "
-                        "Game sẽ không scale ảnh để tránh lệch tọa độ. "
-                        "Hãy sửa width/height/tile trong Tiled hoặc dùng ảnh đúng kích thước."
-                    )
-                return bg
-
-        print("WARNING: Không tìm thấy ảnh nền trong TMX. Game sẽ vẽ map dạng debug.")
+        print(f"WARNING: Không tìm thấy ảnh nền {image_path}. Game sẽ vẽ map dạng debug.")
         return None
 
     def pixel_to_grid(self, x, y):
@@ -225,11 +233,12 @@ class Game:
 
     def present_world(self):
         """Scale cả world_surface ra cửa sổ. Tất cả tọa độ vẫn đúng vì đã vẽ ở hệ gốc."""
-        if (self.window_width, self.window_height) == (self.world_width, self.world_height):
-            self.screen.blit(self.world_surface, (0, 0))
+        self.screen.fill(BLACK)
+        if (self.drawn_width, self.drawn_height) == (self.world_width, self.world_height):
+            self.screen.blit(self.world_surface, (self.offset_x, self.offset_y))
         else:
-            scaled = pygame.transform.smoothscale(self.world_surface, (self.window_width, self.window_height))
-            self.screen.blit(scaled, (0, 0))
+            scaled = pygame.transform.smoothscale(self.world_surface, (self.drawn_width, self.drawn_height))
+            self.screen.blit(scaled, (self.offset_x, self.offset_y))
 
     def run_algorithm(self):
         print("Starting BFS visualization...")
@@ -249,6 +258,10 @@ class Game:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
+                elif event.type == pygame.VIDEORESIZE:
+                    self.window_width, self.window_height = event.w, event.h
+                    self.screen = pygame.display.set_mode((self.window_width, self.window_height), pygame.RESIZABLE)
+                    self._recalculate_scale()
                 elif event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_m:
                         self.manual_mode = not self.manual_mode
