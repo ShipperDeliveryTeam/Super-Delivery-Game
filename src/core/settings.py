@@ -48,7 +48,7 @@ class GameSettings:
         except Exception:
             return
 
-        if 1 <= map_id <= 4:
+        if 1 <= map_id <= 3:
             self.selected_map_id = map_id
 
     def set_algorithm(self, algorithm: str) -> None:

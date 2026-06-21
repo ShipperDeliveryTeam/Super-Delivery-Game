@@ -107,7 +107,7 @@ class EventHandler:
         elif key == pygame.K_l:
             commands.append(GameCommand(CommandType.DEBUG_LOSE))
 
-        elif key in (pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4):
+        elif key in (pygame.K_1, pygame.K_2, pygame.K_3):
             commands.append(GameCommand(CommandType.SELECT_MAP, int(pygame.key.name(key))))
 
         elif key == pygame.K_F1:

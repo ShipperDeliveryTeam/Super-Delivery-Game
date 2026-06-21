@@ -1,0 +1,230 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<map version="1.10" tiledversion="1.12.2" orientation="orthogonal" renderorder="right-down" width="48" height="32" tilewidth="32" tileheight="32" infinite="0" nextlayerid="13" nextobjectid="54">
+ <tileset firstgid="1" source="road.tsx"/>
+ <tileset firstgid="2" source="collision_tiles.tsx"/>
+ <imagelayer id="2" name="Background">
+  <image source="../../Users/minht/Downloads/map4 (1).png" width="1536" height="1024"/>
+ </imagelayer>
+ <layer id="7" name="Collision" width="48" height="32" visible="0">
+  <data encoding="csv">
+2,2,2,2,2,2,2,2,2,2,0,2,2,2,2,2,2,2,2,2,2,2,2,0,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,
+2,0,0,0,0,0,0,0,0,0,0,2,2,2,2,2,2,2,2,2,2,2,2,0,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,
+0,2,2,2,2,2,2,2,2,2,0,2,2,2,2,2,2,2,2,2,2,2,2,0,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,
+0,2,2,2,2,2,2,2,2,2,0,2,2,2,2,2,2,2,2,2,2,2,2,0,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,
+0,2,2,2,0,0,2,2,2,2,0,2,2,2,2,2,2,2,0,0,0,0,0,0,2,2,0,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,
+0,0,0,0,0,0,0,0,0,0,0,2,2,2,2,2,2,2,2,2,2,2,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,2,2,2,2,
+0,2,2,2,2,2,2,2,2,2,0,0,0,0,0,2,2,2,2,2,2,2,2,0,2,2,2,2,2,2,2,2,2,2,2,2,0,2,2,2,2,2,0,2,2,2,2,2,
+0,2,2,2,2,2,2,2,2,2,2,0,0,2,2,2,2,2,2,2,2,2,2,0,2,2,2,2,2,2,2,2,2,2,2,0,2,2,2,2,2,2,0,2,2,2,2,2,
+0,2,2,2,2,2,2,2,2,2,2,2,0,0,2,2,2,2,0,0,0,0,0,0,2,2,2,2,2,2,2,2,2,2,0,2,2,2,2,2,2,2,0,2,2,2,2,2,
+0,2,2,2,2,0,2,2,2,2,2,2,2,0,0,2,2,2,2,2,2,2,2,0,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,2,2,2,2,2,2,0,0,0,0,2,2,2,2,2,0,0,2,2,2,2,2,2,2,2,2,2,2,2,2,2,
+0,2,2,2,0,2,2,2,2,0,2,2,2,0,2,0,0,2,2,2,2,0,0,0,2,2,2,2,2,2,2,0,2,0,2,2,2,2,2,2,2,2,2,2,2,2,2,2,
+0,2,2,2,0,2,2,2,2,0,2,2,2,0,2,2,0,0,2,2,2,2,2,0,2,2,2,2,2,2,0,2,2,0,0,0,0,0,0,0,0,0,0,2,2,2,2,2,
+0,2,0,2,0,2,2,2,2,0,2,0,2,0,2,2,2,0,2,2,2,2,2,0,2,2,2,2,2,0,2,2,2,2,2,2,2,2,2,2,2,2,0,2,2,2,2,2,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,2,2,0,0,0,2,2,2,0,0,0,0,0,0,0,0,2,2,0,0,0,0,0,2,2,2,2,2,
+0,2,2,2,2,2,2,2,2,0,2,2,2,0,2,2,2,2,2,0,2,0,2,2,2,0,2,0,0,2,2,2,2,2,2,2,2,2,2,2,2,2,0,2,2,2,2,2,
+0,2,2,2,2,2,2,2,2,0,2,2,2,0,2,2,2,2,2,2,0,0,2,2,2,0,0,2,0,2,2,2,2,2,2,2,2,2,2,2,2,2,0,2,2,2,2,2,
+0,2,2,2,2,2,2,2,2,0,2,2,2,0,2,2,2,2,2,2,2,0,2,2,2,0,2,2,0,2,2,2,2,2,2,2,2,2,2,2,2,2,0,2,2,2,2,2,
+0,2,2,2,0,2,2,2,2,0,2,2,2,0,2,2,2,2,2,2,0,2,0,0,0,2,0,2,0,2,2,2,2,2,2,2,2,2,2,2,2,2,0,2,2,2,2,2,
+0,2,2,2,0,2,2,2,2,0,2,2,2,0,2,2,2,2,2,0,2,2,2,0,2,2,2,0,0,2,2,2,2,2,2,2,2,2,2,2,2,2,0,2,2,2,2,2,
+0,2,2,2,0,2,2,2,2,0,2,2,2,0,2,2,2,2,0,2,2,2,2,0,2,2,2,2,0,0,0,0,0,0,0,0,2,2,0,0,0,0,0,2,2,2,2,2,
+0,0,0,0,0,0,0,0,0,0,2,2,2,0,2,2,2,0,0,0,0,0,0,0,0,0,0,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,
+0,2,2,2,2,2,2,2,2,0,2,2,2,0,2,2,0,2,2,2,2,2,2,0,2,2,2,0,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,
+0,2,2,2,2,2,2,2,2,0,2,2,2,0,2,0,2,2,2,2,2,2,2,0,2,2,2,2,0,2,2,2,0,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,
+0,2,2,2,2,2,2,2,2,0,2,2,2,0,0,2,2,2,2,2,2,2,2,0,2,2,2,2,0,0,0,0,0,0,0,0,0,0,2,2,2,2,2,2,2,2,2,2,
+0,2,2,2,2,2,2,2,2,0,0,0,0,0,2,2,2,2,2,2,2,2,2,0,2,2,2,2,0,2,2,2,2,2,2,2,2,0,2,2,2,2,2,0,2,2,2,2,
+0,2,2,2,2,2,2,2,2,0,2,2,2,2,2,2,2,2,2,2,2,2,2,0,2,2,2,2,0,2,2,2,2,2,2,2,2,0,0,0,0,0,0,0,2,2,2,2,
+0,2,2,2,2,2,2,2,2,0,2,2,2,2,2,2,2,2,2,2,2,2,2,0,2,2,2,2,0,2,2,2,2,2,2,2,2,0,2,2,2,2,2,0,2,2,2,2,
+0,0,0,0,0,0,0,0,0,0,2,2,2,2,2,2,2,2,2,2,2,2,2,0,2,2,2,2,0,2,2,2,2,2,2,2,2,0,2,2,2,2,2,0,2,2,2,2,
+0,2,2,2,2,0,2,2,2,0,2,2,2,2,2,2,2,2,2,2,2,2,2,0,2,2,2,2,0,2,2,2,2,2,2,2,2,0,2,2,2,2,2,0,2,2,2,2,
+0,2,2,2,2,0,2,2,2,0,0,2,2,2,2,2,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,2,2,2,2,0,2,2,2,0,2,2,2,2,2,2,2,2,2,2,2,2,2,0,2,2,2,2,2,2,2,2,2,2,2,2,2,0,2,2,2,2,2,0,2,2,2,2
+</data>
+ </layer>
+ <layer id="6" name="Road_AI" width="48" height="32">
+  <data encoding="csv">
+0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+1,0,0,0,1,1,0,0,0,0,1,0,0,0,0,0,0,0,1,1,1,1,1,1,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,
+1,0,0,0,0,0,0,0,0,0,1,1,1,1,1,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,
+1,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1,0,0,0,0,0,
+1,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,
+1,0,0,0,0,1,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,1,1,1,1,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+1,0,0,0,1,0,0,0,0,1,0,0,0,1,0,1,1,0,0,0,0,1,1,1,0,0,0,0,0,0,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+1,0,0,0,1,0,0,0,0,1,0,0,0,1,0,0,1,1,0,0,0,0,0,1,0,0,0,0,0,0,1,0,0,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,
+1,0,1,0,1,0,0,0,0,1,0,1,0,1,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,
+1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,1,1,1,0,0,0,1,1,1,1,1,1,1,1,0,0,1,1,1,1,1,0,0,0,0,0,
+1,0,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,1,0,1,0,0,0,1,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,
+1,0,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,1,1,0,0,0,1,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,
+1,0,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,1,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,
+1,0,0,0,1,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,1,0,1,1,1,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,
+1,0,0,0,1,0,0,0,0,1,0,0,0,1,0,0,0,0,0,1,0,0,0,1,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,
+1,0,0,0,1,0,0,0,0,1,0,0,0,1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1,1,1,1,1,1,1,1,0,0,1,1,1,1,1,0,0,0,0,0,
+1,1,1,1,1,1,1,1,1,1,0,0,0,1,0,0,0,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+1,0,0,0,0,0,0,0,0,1,0,0,0,1,0,0,1,0,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+1,0,0,0,0,0,0,0,0,1,0,0,0,1,0,1,0,0,0,0,0,0,0,1,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+1,0,0,0,0,0,0,0,0,1,0,0,0,1,1,0,0,0,0,0,0,0,0,1,0,0,0,0,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,
+1,0,0,0,0,0,0,0,0,1,1,1,1,1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,
+1,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,0,0,0,0,
+1,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,
+1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,
+1,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,
+1,0,0,0,0,1,0,0,0,1,1,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+1,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0
+</data>
+ </layer>
+ <objectgroup id="11" name="Objects">
+  <object id="4" name="player_spawn" type="Player" x="736" y="672" width="32" height="32">
+   <properties>
+    <property name="spawn" type="bool" value="true"/>
+   </properties>
+  </object>
+  <object id="5" name="pickup_gas_station" type="PickupPoint" x="160" y="128" width="32" height="32">
+   <properties>
+    <property name="base_reward" type="int" value="200"/>
+    <property name="shop_name" value="Gas station"/>
+   </properties>
+  </object>
+  <object id="6" name="pickup_industrial" type="PickupPoint" x="448" y="192" width="32" height="32">
+   <properties>
+    <property name="base_reward" type="int" value="120"/>
+    <property name="shop_name" value="Industrial zone"/>
+   </properties>
+  </object>
+  <object id="7" name="pickup_hospital" type="PickupPoint" x="832" y="128" width="32" height="32">
+   <properties>
+    <property name="base_reward" type="int" value="150"/>
+    <property name="shop_name" value="Hospital"/>
+   </properties>
+  </object>
+  <object id="8" name="pickup_police" type="PickupPoint" x="832" y="320" width="32" height="32">
+   <properties>
+    <property name="base_reward" type="int" value="250"/>
+    <property name="shop_name" value="Police"/>
+   </properties>
+  </object>
+  <object id="9" name="pickup_warehouse" type="PickupPoint" x="1056" y="320" width="32" height="32">
+   <properties>
+    <property name="base_reward" type="int" value="50"/>
+    <property name="shop_name" value="Warehouse"/>
+   </properties>
+  </object>
+  <object id="10" name="pickup_port" type="PickupPoint" x="1344" y="384" width="32" height="32">
+   <properties>
+    <property name="base_reward" type="int" value="120"/>
+    <property name="shop_name" value="Port"/>
+   </properties>
+  </object>
+  <object id="11" name="pickup_hospital" type="PickupPoint" x="1344" y="544" width="32" height="32">
+   <properties>
+    <property name="base_reward" type="int" value="60"/>
+    <property name="shop_name" value="Hospital"/>
+   </properties>
+  </object>
+  <object id="12" name="pickup_train_station" type="PickupPoint" x="1056" y="448" width="32" height="32">
+   <properties>
+    <property name="base_reward" type="int" value="180"/>
+    <property name="shop_name" value="TrainStation"/>
+   </properties>
+  </object>
+  <object id="13" name="pickup_cafe" type="PickupPoint" x="928" y="640" width="32" height="32">
+   <properties>
+    <property name="base_reward" type="int" value="25"/>
+    <property name="shop_name" value="Cafe"/>
+   </properties>
+  </object>
+  <object id="15" name="pickup_airport" type="PickupPoint" x="1376" y="800" width="32" height="32">
+   <properties>
+    <property name="base_reward" type="int" value="300"/>
+    <property name="shop_name" value="Airport"/>
+   </properties>
+  </object>
+  <object id="16" name="pickup_bank" type="PickupPoint" x="1024" y="736" width="32" height="32">
+   <properties>
+    <property name="base_reward" type="int" value="80"/>
+    <property name="shop_name" value="Bank"/>
+   </properties>
+  </object>
+  <object id="17" name="pickup_electro" type="PickupPoint" x="736" y="832" width="32" height="32">
+   <properties>
+    <property name="base_reward" type="int" value="80"/>
+    <property name="shop_name" value="Electro"/>
+   </properties>
+  </object>
+  <object id="18" name="pickup_grandmall" type="PickupPoint" x="1056" y="960" width="32" height="32">
+   <properties>
+    <property name="base_reward" type="int" value="150"/>
+    <property name="shop_name" value="GrandMall"/>
+   </properties>
+  </object>
+  <object id="19" name="pickup_pish" type="PickupPoint" x="0" y="960" width="32" height="32">
+   <properties>
+    <property name="base_reward" type="int" value="75"/>
+    <property name="shop_name" value="Fish"/>
+   </properties>
+  </object>
+  <object id="20" name="pickup_school" type="PickupPoint" x="128" y="576" width="32" height="32">
+   <properties>
+    <property name="base_reward" type="int" value="100"/>
+    <property name="shop_name" value="School"/>
+   </properties>
+  </object>
+  <object id="21" name="pickup_furniture" type="PickupPoint" x="64" y="416" width="32" height="32">
+   <properties>
+    <property name="base_reward" type="int" value="160"/>
+    <property name="shop_name" value="Furniture"/>
+   </properties>
+  </object>
+  <object id="22" name="pickup_cafe" type="PickupPoint" x="352" y="416" width="32" height="32">
+   <properties>
+    <property name="base_reward" type="int" value="20"/>
+    <property name="shop_name" value="Cafe"/>
+   </properties>
+  </object>
+  <object id="23" name="pickup_shoppingmall" type="PickupPoint" x="608" y="672" width="32" height="32">
+   <properties>
+    <property name="base_reward" type="int" value="250"/>
+    <property name="shop_name" value="Shopping Mall"/>
+   </properties>
+  </object>
+  <object id="24" name="pickup_megamart" type="PickupPoint" x="160" y="288" width="32" height="32">
+   <properties>
+    <property name="base_reward" type="int" value="220"/>
+    <property name="shop_name" value="Mega mart"/>
+   </properties>
+  </object>
+  <object id="25" name="house_1" type="DeliveryPoint" x="576" y="128" width="32" height="32"/>
+  <object id="26" name="house_2" type="DeliveryPoint" x="672" y="128" width="32" height="32"/>
+  <object id="27" name="house_3" type="DeliveryPoint" x="928" y="160" width="32" height="32"/>
+  <object id="28" name="house_4" type="DeliveryPoint" x="1024" y="160" width="32" height="32"/>
+  <object id="29" name="house_5" type="DeliveryPoint" x="1248" y="160" width="32" height="32"/>
+  <object id="30" name="house_6" type="DeliveryPoint" x="256" y="160" width="32" height="32"/>
+  <object id="31" name="house_7" type="DeliveryPoint" x="672" y="256" width="32" height="32"/>
+  <object id="32" name="house_8" type="DeliveryPoint" x="576" y="256" width="32" height="32"/>
+  <object id="33" name="house_9" type="DeliveryPoint" x="0" y="256" width="32" height="32"/>
+  <object id="34" name="house_10" type="DeliveryPoint" x="352" y="320" width="32" height="32"/>
+  <object id="35" name="house_11" type="DeliveryPoint" x="544" y="384" width="32" height="32"/>
+  <object id="36" name="house_12" type="DeliveryPoint" x="480" y="320" width="32" height="32"/>
+  <object id="37" name="house_13" type="DeliveryPoint" x="672" y="352" width="32" height="32"/>
+  <object id="38" name="house_14" type="DeliveryPoint" x="480" y="448" width="32" height="32"/>
+  <object id="39" name="house_15" type="DeliveryPoint" x="416" y="544" width="32" height="32"/>
+  <object id="40" name="house_16" type="DeliveryPoint" x="32" y="672" width="32" height="32"/>
+  <object id="41" name="house_17" type="DeliveryPoint" x="352" y="800" width="32" height="32"/>
+  <object id="42" name="house_18" type="DeliveryPoint" x="288" y="864" width="32" height="32"/>
+  <object id="43" name="house_19" type="DeliveryPoint" x="320" y="960" width="32" height="32"/>
+  <object id="44" name="house-20" type="DeliveryPoint" x="160" y="960" width="32" height="32"/>
+  <object id="45" name="house_21" type="DeliveryPoint" x="672" y="960" width="32" height="32"/>
+  <object id="46" name="house_22" type="DeliveryPoint" x="800" y="960" width="32" height="32"/>
+  <object id="47" name="house_23" type="DeliveryPoint" x="1088" y="768" width="32" height="32"/>
+  <object id="48" name="house_24" type="DeliveryPoint" x="800" y="672" width="32" height="32"/>
+  <object id="49" name="house_25" type="DeliveryPoint" x="928" y="416" width="32" height="32"/>
+  <object id="50" name="house_26" type="DeliveryPoint" x="896" y="576" width="32" height="32"/>
+  <object id="51" name="npc_spawn_1" type="NPC" x="736" y="672" width="32" height="32"/>
+  <object id="52" name="npc_spawn_2" type="NPC" x="736" y="672" width="32" height="32"/>
+  <object id="53" name="npc_spawn_3" type="NPC" x="736" y="672" width="32" height="32"/>
+ </objectgroup>
+</map>

@@ -1,0 +1,20 @@
+{
+    "activeFile": "",
+    "expandedProjectPaths": [
+    ],
+    "fileStates": {
+        "map4/road.tsx": {
+            "scaleInDock": 1,
+            "scaleInEditor": 1
+        }
+    },
+    "last.imagePath": "C:/Users/minht/Downloads",
+    "map.lastUsedFormat": "tmx",
+    "openFiles": [
+    ],
+    "project": "map4.tiled-project",
+    "recentFiles": [
+        "map4/road.tsx"
+    ],
+    "tileset.lastUsedFormat": "tsx"
+}

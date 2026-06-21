@@ -241,10 +241,21 @@ class TmxMapLoader:
                 break
 
         if image_path is None:
-            guessed = PROJECT_ROOT / "assets" / "images" / "map" / "map1.png"
+            stem = tmx_path.stem
+            map_id = "".join(ch for ch in stem if ch.isdigit())
+            guesses = [
+                PROJECT_ROOT / "assets" / "images" / "map" / f"{stem}.png",
+                PROJECT_ROOT / "assets" / "images" / "map" / f"{stem.replace('_', '')}.png",
+                PROJECT_ROOT / "assets" / "images" / "map" / f"map_{map_id}.png" if map_id else None,
+                PROJECT_ROOT / "assets" / "images" / f"{stem}.png",
+                PROJECT_ROOT / "assets" / "maps" / f"{stem}.png",
+                PROJECT_ROOT / "assets" / "images" / "map" / "map1.png",
+            ]
 
-            if guessed.exists():
-                image_path = guessed
+            for guessed in guesses:
+                if guessed is not None and guessed.exists():
+                    image_path = guessed
+                    break
 
         if image_path is None:
             return None
@@ -370,6 +381,9 @@ class TmxMapLoader:
 
         while q:
             x, y = q.popleft()
+            
+            if abs(x - start[0]) + abs(y - start[1]) > 25:
+                continue
 
             for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
                 if not (0 <= nx < width and 0 <= ny < height):

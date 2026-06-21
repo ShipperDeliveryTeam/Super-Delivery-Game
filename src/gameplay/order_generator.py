@@ -40,7 +40,7 @@ class OrderGenerator:
             if result.success and result.path:
                 return len(result.path)
 
-            return 0
+            return 1_000_000
 
         result = self.store_selector.select_store(
             stores=stores,

@@ -2,6 +2,7 @@ import random
 from pathlib import Path
 from typing import List, Optional, Tuple
 
+# pyrefly: ignore [missing-import]
 import pygame
 
 from .constants import (
@@ -73,11 +74,13 @@ class GameManager:
         self.ui_logo = None
         self.ui_background = None
         self.ui_shipper = None
+        self.ui_simulation_button = None
         self.ui_play_button = None
         self.ui_sound_on = None
         self.ui_sound_off = None
         self.ui_menu_button = None
 
+        self.simulation_button_rect = None
         self.play_button_rect = None
         self.sound_button_rect = None
         self.menu_button_rect = None
@@ -109,12 +112,13 @@ class GameManager:
         self.player_spawn: Tuple[int, int] = (3, 3)
         self.npc_spawns: list[Tuple[int, int]] = []
 
-        self.pathfinder = GamePathfinder(GRID_COLS, GRID_ROWS, set())
+        self.pathfinder = GamePathfinder(GRID_COLS, GRID_ROWS, set(), allow_diagonal=self._allow_diagonal_movement())
 
         self.player: Optional[DirectionalShipper] = None
         self.player_task: Optional[DeliveryTask] = None
         self.player_path_hint: List[Tuple[int, int]] = []
         self.player_path_expanded = 0
+        self._player_last_trap_penalty_pos: Tuple[int, int] | None = None
 
         self.npc_shippers: list[DirectionalShipper] = []
         self.npc_tasks: dict[str, DeliveryTask] = {}
@@ -130,6 +134,7 @@ class GameManager:
         self.result_logged = False
         self.winner_name = ""
         self.auto_player_enabled = False
+        self.simulation_mode = False
         self.hud_mode = 1
 
         self._load_assets()
@@ -140,10 +145,26 @@ class GameManager:
         return Path(MAPS_DIR)
 
     def _tmx_path(self, map_id: int) -> Path:
+        from src.systems.asset_paths import PROJECT_ROOT
+        
+        candidates = [
+            PROJECT_ROOT / "maps" / f"map{map_id}" / f"map{map_id}.tmx",
+            PROJECT_ROOT / "maps" / f"map_{map_id}.tmx",
+            self._asset_maps_dir() / f"map_{map_id}.tmx",
+            self._asset_maps_dir() / f"map{map_id}.tmx",
+        ]
+        
+        for c in candidates:
+            if c.exists():
+                return c
+                
         return self._asset_maps_dir() / f"map_{map_id}.tmx"
 
     def _matrix_path(self, map_id: int) -> Path:
         return self._asset_maps_dir() / f"map_{map_id}_matrix.csv"
+
+    def _allow_diagonal_movement(self) -> bool:
+        return self.settings.selected_map_id == 2
 
     def _load_ui_image(self, filename: str, size: tuple[int, int] | None = None):
         """
@@ -209,6 +230,23 @@ class GameManager:
             pygame.draw.rect(self.screen, color, scale_rect, border_radius=16)
             pygame.draw.rect(self.screen, (255, 255, 255), scale_rect, width=3, border_radius=16)
             self._draw_text(fallback_text, self.font_mid, (255, 255, 255), scale_rect.centerx, scale_rect.centery, center=True)
+
+    def _draw_simulation_button(self, rect: pygame.Rect) -> None:
+        mouse_pos = pygame.mouse.get_pos()
+        hover = rect.collidepoint(mouse_pos)
+
+        draw_rect = rect.copy()
+        if hover:
+            draw_rect.inflate_ip(8, 8)
+
+        if self.ui_simulation_button:
+            img = pygame.transform.smoothscale(self.ui_simulation_button, (draw_rect.width, draw_rect.height))
+            self.screen.blit(img, draw_rect)
+        else:
+            color = (78, 220, 48) if hover else (55, 190, 70)
+            pygame.draw.rect(self.screen, color, draw_rect, border_radius=18)
+            pygame.draw.rect(self.screen, (20, 35, 24), draw_rect, width=5, border_radius=18)
+            self._draw_text("AUTO", self.font_big, (255, 255, 255), draw_rect.centerx, draw_rect.centery, center=True)
 
     def _draw_small_round_button(self, rect: pygame.Rect, image, fallback_text: str, bg_color: tuple[int, int, int]) -> None:
         mouse_pos = pygame.mouse.get_pos()
@@ -367,9 +405,9 @@ class GameManager:
         self._draw_text(difficulty, self.font_mid, (80, 255, 90), panel.x + 335, panel.y + 285, center=True)
 
     def _get_map_difficulty_text(self, map_id: int) -> str:
-        if map_id in (1, 2):
+        if map_id == 1:
             return "EASY"
-        if map_id == 3:
+        if map_id == 2:
             return "MEDIUM"
         return "HARD"
 
@@ -377,8 +415,8 @@ class GameManager:
         new_map = self.settings.selected_map_id + delta
 
         if new_map < 1:
-            new_map = 4
-        elif new_map > 4:
+            new_map = 3
+        elif new_map > 3:
             new_map = 1
 
         self.settings.set_map(new_map)
@@ -539,15 +577,36 @@ class GameManager:
                 self.running = False
                 return
 
-        if self.play_button_rect and self.play_button_rect.collidepoint(pos):
-            self._reset_game()
-            self.state = GameState.PLAYING
+        if self.simulation_button_rect and self.simulation_button_rect.collidepoint(pos):
+            self._start_simulation_mode()
             return
+
+        if self.play_button_rect and self.play_button_rect.collidepoint(pos):
+            self._start_play_mode()
+            return
+
+    def _start_play_mode(self) -> None:
+        self.simulation_mode = False
+        self._reset_game()
+        self.state = GameState.PLAYING
+
+    def _start_simulation_mode(self) -> None:
+        self.simulation_mode = True
+        self._reset_game()
+        self.auto_player_enabled = False
+        self.player_path_hint = []
+        self.state = GameState.SIMULATION
 
     def _load_assets(self) -> None:
         self.ui_background = self._load_ui_image("phongnen.png", (SCREEN_WIDTH, SCREEN_HEIGHT))
         self.ui_logo = self._load_ui_image("logo.png", (860, 300))
-        self.ui_shipper = self._load_ui_image("shipper.png", (620, 430))
+        right_path = get_player_sprite_paths().get("right")
+        self.ui_shipper = None
+        if right_path and right_path.exists():
+            try:
+                self.ui_shipper = pygame.image.load(str(right_path)).convert_alpha()
+            except Exception:
+                pass
 
         self.ui_play_button = self.sprite_loader.load_image(
             get_icon_path("play"),
@@ -555,6 +614,7 @@ class GameManager:
             fallback_color=(55, 200, 70),
             fallback_text="PLAY",
         )
+        self.ui_simulation_button = self._load_simulation_button_image()
         self.ui_sound_on = self.sprite_loader.load_image(
             get_icon_path("sound_on"),
             size=(58, 58),
@@ -573,9 +633,6 @@ class GameManager:
             fallback_color=(90, 130, 230),
             fallback_text="☰",
         )
-        self.ui_background = self._load_ui_image("phongnen.png", (SCREEN_WIDTH, SCREEN_HEIGHT))
-        self.ui_logo = self._load_ui_image("logo.png", (560, 230))
-        self.ui_shipper = self._load_ui_image("shipper.png", (210, 150))
         self.icons["store"] = self.sprite_loader.load_image(
             get_icon_path("store"),
             size=(TILE_SIZE, TILE_SIZE),
@@ -596,6 +653,43 @@ class GameManager:
             fallback_color=(240, 210, 70),
             fallback_text="$",
         )
+
+    def _load_simulation_button_image(self):
+        path = get_icon_path("simulation")
+
+        if not path:
+            return self.sprite_loader.load_image(
+                None,
+                size=(310, 115),
+                fallback_color=(55, 120, 220),
+                fallback_text="SIM",
+            )
+
+        try:
+            image = pygame.image.load(str(path)).convert_alpha()
+            width, height = image.get_size()
+
+            # Old exports were full-screen canvases. Current button art is already
+            # a wide button, so only crop near-square/full-canvas images.
+            if width >= 1000 and height >= 700 and width / max(1, height) < 2.2:
+                crop = pygame.Rect(
+                    int(width * 0.07),
+                    int(height * 0.31),
+                    int(width * 0.86),
+                    int(height * 0.36),
+                )
+                image = image.subsurface(crop).copy()
+
+            return image
+
+        except Exception as exc:
+            print(f"[WARN] Khong load duoc simulation button: {path} | {exc}")
+            return self.sprite_loader.load_image(
+                None,
+                size=(310, 115),
+                fallback_color=(55, 120, 220),
+                fallback_text="SIM",
+            )
 
     def _load_map_for_selected_map(self) -> None:
         map_id = self.settings.selected_map_id
@@ -625,7 +719,12 @@ class GameManager:
                 self.npc_spawns = data.npc_spawns or []
 
                 self.blocked_positions = self.tmx_loader.blocked_positions(self.grid_matrix)
-                self.pathfinder = GamePathfinder(self.map_cols, self.map_rows, self.blocked_positions)
+                self.pathfinder = GamePathfinder(
+                    self.map_cols,
+                    self.map_rows,
+                    self.blocked_positions,
+                    allow_diagonal=self._allow_diagonal_movement(),
+                )
                 self.map_source = f"TMX: {tmx_path.name}"
                 self._ensure_minimum_positions()
                 return
@@ -654,7 +753,12 @@ class GameManager:
 
         safe = set(self.store_positions + self.house_positions) | self.trap_positions
         self.blocked_positions -= safe
-        self.pathfinder = GamePathfinder(self.map_cols, self.map_rows, self.blocked_positions)
+        self.pathfinder = GamePathfinder(
+            self.map_cols,
+            self.map_rows,
+            self.blocked_positions,
+            allow_diagonal=self._allow_diagonal_movement(),
+        )
         self.map_source = f"CSV: {matrix_path.name}"
         self._load_png_map_background()
         self._ensure_minimum_positions()
@@ -749,6 +853,7 @@ class GameManager:
         )
 
         self.player = DirectionalShipper("Player", self.player_spawn, player_sprites, TILE_SIZE)
+        self.player.allow_diagonal = self._allow_diagonal_movement()
 
         self.npc_shippers = []
         default_positions = [(8, 8), (14, 10), (20, 12)]
@@ -767,6 +872,7 @@ class GameManager:
 
             npc = DirectionalShipper(f"NPC {i + 1}", pos, npc_sprites, TILE_SIZE)
             npc.algorithm = algorithms[i]
+            npc.allow_diagonal = self._allow_diagonal_movement()
             self.npc_shippers.append(npc)
 
     def run(self) -> None:
@@ -793,16 +899,15 @@ class GameManager:
 
         elif ctype == CommandType.START_GAME:
             if self.state in (GameState.MENU, GameState.GAME_OVER, GameState.WIN):
-                self._reset_game()
-                self.state = GameState.PLAYING
+                self._start_play_mode()
             elif self.state == GameState.PAUSED:
-                self.state = GameState.PLAYING
+                self.state = GameState.SIMULATION if self.simulation_mode else GameState.PLAYING
 
         elif ctype == CommandType.PAUSE_GAME:
-            if self.state == GameState.PLAYING:
+            if self.state in (GameState.PLAYING, GameState.SIMULATION):
                 self.state = GameState.PAUSED
             elif self.state == GameState.PAUSED:
-                self.state = GameState.PLAYING
+                self.state = GameState.SIMULATION if self.simulation_mode else GameState.PLAYING
             elif self.state in (GameState.WIN, GameState.GAME_OVER):
                 self.state = GameState.MENU
 
@@ -813,7 +918,9 @@ class GameManager:
 
         elif ctype == CommandType.SELECT_ALGORITHM and command.value is not None:
             self.settings.set_algorithm(str(command.value))
-            self._refresh_player_path_hint()
+
+            if not self.simulation_mode:
+                self._refresh_player_path_hint()
 
         elif ctype == CommandType.TOGGLE_GRID:
             self.settings.toggle_grid()
@@ -832,16 +939,16 @@ class GameManager:
             self.hud_mode = (self.hud_mode + 1) % 3
 
         elif ctype == CommandType.MOVE_UP:
-            self.move_dir = (0, -1)
+            self._request_player_step(0, -1)
 
         elif ctype == CommandType.MOVE_DOWN:
-            self.move_dir = (0, 1)
+            self._request_player_step(0, 1)
 
         elif ctype == CommandType.MOVE_LEFT:
-            self.move_dir = (-1, 0)
+            self._request_player_step(-1, 0)
 
         elif ctype == CommandType.MOVE_RIGHT:
-            self.move_dir = (1, 0)
+            self._request_player_step(1, 0)
 
         elif ctype == CommandType.STOP_MOVE:
             self.move_dir = (0, 0)
@@ -852,6 +959,17 @@ class GameManager:
         elif ctype == CommandType.DEBUG_LOSE:
             self._finish_game("NPC DEBUG")
 
+    def _request_player_step(self, dx: int, dy: int) -> None:
+        if self.state != GameState.PLAYING or self.auto_player_enabled:
+            return
+
+        if self._allow_diagonal_movement():
+            self._poll_keyboard_movement()
+            return
+
+        self.move_dir = (int(dx), int(dy))
+        self._move_player(allow_queue=True)
+
     def _poll_keyboard_movement(self) -> None:
         keys = pygame.key.get_pressed()
 
@@ -861,10 +979,14 @@ class GameManager:
             dx = -1
         elif keys[pygame.K_d] or keys[pygame.K_RIGHT]:
             dx = 1
-        elif keys[pygame.K_w] or keys[pygame.K_UP]:
+
+        if keys[pygame.K_w] or keys[pygame.K_UP]:
             dy = -1
         elif keys[pygame.K_s] or keys[pygame.K_DOWN]:
             dy = 1
+
+        if not self._allow_diagonal_movement() and dx != 0:
+            dy = 0
 
         self.move_dir = (dx, dy)
 
@@ -874,6 +996,9 @@ class GameManager:
     def _update_smooth_entities(self, dt: float) -> None:
         if self.player:
             self.player.update_smooth(dt)
+
+            if self.state == GameState.PLAYING:
+                self._handle_player_task_at_current_pos()
 
         for npc in self.npc_shippers:
             npc.update_smooth(dt)
@@ -885,17 +1010,29 @@ class GameManager:
         if self.player_task is None or self.player_task.delivered:
             self.player_task = self._new_task("Player")
 
-        if not self.player_path_hint or len(self.player_path_hint) <= 1:
+        base_pos = self._movement_base_pos(self.player)
+
+        if (
+            not self.player_path_hint
+            or self.player_path_hint[-1] != self.player_task.target_pos
+            or base_pos not in self.player_path_hint[:2]
+        ):
             self._refresh_player_path_hint()
 
-        if not self.player_path_hint or len(self.player_path_hint) <= 1:
+        while self.player_path_hint and self.player_path_hint[0] == base_pos:
+            self.player_path_hint.pop(0)
+
+        if not self.player_path_hint:
+            self._refresh_player_path_hint()
+
+        if not self.player_path_hint:
             return
 
-        next_pos = self.player_path_hint[1]
-        dx = next_pos[0] - self.player.grid_pos[0]
-        dy = next_pos[1] - self.player.grid_pos[1]
+        next_pos = self.player_path_hint[0]
+        dx = next_pos[0] - base_pos[0]
+        dy = next_pos[1] - base_pos[1]
 
-        if abs(dx) + abs(dy) != 1:
+        if not self.pathfinder._can_step(base_pos, next_pos):
             self._refresh_player_path_hint()
             return
 
@@ -904,43 +1041,47 @@ class GameManager:
         self._move_player()
         self.move_dir = old_dir
 
-        self._refresh_player_path_hint()
+        if self.player_path_hint and self.player_path_hint[0] == next_pos:
+            self.player_path_hint.pop(0)
 
     def _update(self, dt: float) -> None:
         if self.state == GameState.MENU:
             self.menu_cloud_offset = (getattr(self, "menu_cloud_offset", 0.0) + dt * 28) % (SCREEN_WIDTH + 360)
             return
 
-        if self.state != GameState.PLAYING:
+        if self.state not in (GameState.PLAYING, GameState.SIMULATION):
             return
 
         self._update_smooth_entities(dt)
         self.elapsed_time += dt
 
-        if not self.auto_player_enabled:
+        if self.state == GameState.PLAYING and not self.auto_player_enabled:
             self._poll_keyboard_movement()
 
         self.move_timer += dt
 
-        if self.move_timer >= 0.065:
+        if self.state == GameState.PLAYING and self.move_timer >= 0.065:
             self.move_timer = 0.0
 
             if self.auto_player_enabled:
                 self._move_player_auto()
             else:
-                self._move_player()
+                self._move_player(allow_queue=True)
 
         self.npc_timer += dt
 
-        if self.npc_timer >= 0.18:
+        if self.npc_timer >= 0.065:
             self.npc_timer = 0.0
             self._update_npcs()
 
         self.order_timer += dt
 
-        if self.order_timer >= 0.8:
+        if self.state == GameState.PLAYING and self.order_timer >= 0.8:
             self.order_timer = 0.0
             self._refresh_player_path_hint()
+
+        if self.state == GameState.SIMULATION:
+            return
 
         if self.player and self.player.money >= self.settings.target_revenue:
             self._finish_game("Player")
@@ -987,29 +1128,107 @@ class GameManager:
         self.stats_logger.write_record(record)
 
     def _new_task(self, holder_name: Optional[str] = None) -> DeliveryTask:
-        return self.order_generator.create_order(
-            stores=self.store_positions,
-            houses=self.house_positions,
-            pathfinder=self.pathfinder,
-            holder_name=holder_name,
+        fallback_task = None
+
+        for _ in range(40):
+            task = self.order_generator.create_order(
+                stores=self.store_positions,
+                houses=self.house_positions,
+                pathfinder=self.pathfinder,
+                holder_name=holder_name,
+            )
+
+            if fallback_task is None:
+                fallback_task = task
+
+            if self._task_is_reachable(task, holder_name):
+                return task
+
+        reachable_task = self._first_reachable_task(holder_name)
+        return reachable_task or fallback_task
+
+    def _holder_grid_pos(self, holder_name: Optional[str]) -> Tuple[int, int] | None:
+        if holder_name == "Player" and self.player:
+            return self._movement_base_pos(self.player)
+
+        for npc in self.npc_shippers:
+            if npc.name == holder_name:
+                return self._movement_base_pos(npc)
+
+        return None
+
+    def _task_is_reachable(self, task: DeliveryTask, holder_name: Optional[str]) -> bool:
+        start = self._holder_grid_pos(holder_name)
+
+        if start is not None:
+            to_store = self.pathfinder.find_path(start, task.store_pos, "ASTAR")
+
+            if not to_store.success:
+                return False
+
+        to_house = self.pathfinder.find_path(task.store_pos, task.house_pos, "ASTAR")
+        return bool(to_house.success)
+
+    def _first_reachable_task(self, holder_name: Optional[str]) -> DeliveryTask | None:
+        start = self._holder_grid_pos(holder_name)
+
+        for store in self.store_positions:
+            if start is not None and not self.pathfinder.find_path(start, store, "ASTAR").success:
+                continue
+
+            for house in self.house_positions:
+                result = self.pathfinder.find_path(store, house, "ASTAR")
+
+                if result.success:
+                    self.order_generator.last_result = None
+                    return DeliveryTask(
+                        store_pos=store,
+                        house_pos=house,
+                        reward=90,
+                        holder_name=holder_name,
+                    )
+
+        return None
+
+    def _movement_base_pos(self, shipper) -> Tuple[int, int]:
+        if getattr(shipper, "is_moving", False):
+            return tuple(getattr(shipper, "target_grid_pos", shipper.grid_pos))
+
+        return tuple(shipper.grid_pos)
+
+    def _try_move_shipper_delta(self, shipper, dx: int, dy: int, allow_queue: bool = True) -> bool:
+        dx = int(dx)
+        dy = int(dy)
+
+        allow_diagonal = self._allow_diagonal_movement()
+
+        if allow_diagonal:
+            if max(abs(dx), abs(dy)) != 1 or (dx == 0 and dy == 0):
+                return False
+        elif abs(dx) + abs(dy) != 1:
+            return False
+
+        if not allow_queue and getattr(shipper, "is_moving", False):
+            return False
+
+        base_x, base_y = self._movement_base_pos(shipper)
+        next_pos = (
+            max(0, min(self.map_cols - 1, base_x + dx)),
+            max(0, min(self.map_rows - 1, base_y + dy)),
         )
 
-    def _move_player(self) -> None:
+        if next_pos == (base_x, base_y):
+            return True
+
+        if not self.pathfinder.is_walkable(next_pos) or not self.pathfinder._can_step((base_x, base_y), next_pos):
+            return False
+
+        shipper.allow_diagonal = allow_diagonal
+        return bool(shipper.move_grid(dx, dy, self.map_cols, self.map_rows, min_y=0, allow_diagonal=allow_diagonal))
+
+    def _handle_player_task_at_current_pos(self) -> None:
         if not self.player:
             return
-
-        dx, dy = self.move_dir
-
-        if dx == 0 and dy == 0:
-            return
-
-        old_pos = self.player.grid_pos
-        next_pos = (old_pos[0] + dx, old_pos[1] + dy)
-
-        if not self.pathfinder.is_walkable(next_pos):
-            return
-
-        self.player.move_grid(dx, dy, self.map_cols, self.map_rows, min_y=0)
 
         if self.player_task is None or self.player_task.delivered:
             self.player_task = self._new_task("Player")
@@ -1029,7 +1248,27 @@ class GameManager:
             self._refresh_player_path_hint()
 
         if self.player.grid_pos in self.trap_positions:
+            if self._player_last_trap_penalty_pos == self.player.grid_pos:
+                return
+
             self.player.money = max(0, self.player.money - 15)
+            self._player_last_trap_penalty_pos = self.player.grid_pos
+        else:
+            self._player_last_trap_penalty_pos = None
+
+    def _move_player(self, allow_queue: bool = True) -> None:
+        if not self.player:
+            return
+
+        dx, dy = self.move_dir
+
+        if dx == 0 and dy == 0:
+            return
+
+        if not self._try_move_shipper_delta(self.player, dx, dy, allow_queue=allow_queue):
+            return
+
+        self._handle_player_task_at_current_pos()
 
     def _update_npcs(self) -> None:
         for npc in self.npc_shippers:
@@ -1041,19 +1280,27 @@ class GameManager:
             task.assign_to(npc.name)
 
             if not self.npc_paths.get(npc.name):
-                result = self.pathfinder.find_path(npc.grid_pos, task.target_pos, npc.algorithm)
+                result = self.pathfinder.find_path(self._movement_base_pos(npc), task.target_pos, npc.algorithm)
                 self.npc_paths[npc.name] = result.path[1:] if result.success and len(result.path) > 1 else []
                 self.npc_expanded[npc.name] = result.expanded_nodes
 
             path = self.npc_paths.get(npc.name, [])
 
-            if path:
-                next_pos = path.pop(0)
-                dx = next_pos[0] - npc.grid_pos[0]
-                dy = next_pos[1] - npc.grid_pos[1]
+            if path and getattr(npc, "queued_grid_pos", None) is None:
+                base_pos = self._movement_base_pos(npc)
 
-                if self.pathfinder.is_walkable(next_pos):
-                    npc.move_grid(dx, dy, self.map_cols, self.map_rows, min_y=0)
+                while path and path[0] == base_pos:
+                    path.pop(0)
+
+                if path:
+                    next_pos = path[0]
+                    dx = next_pos[0] - base_pos[0]
+                    dy = next_pos[1] - base_pos[1]
+
+                    if self._try_move_shipper_delta(npc, dx, dy):
+                        path.pop(0)
+                    else:
+                        self.npc_paths[npc.name] = []
 
             picked = task.try_pickup(npc.name, npc.grid_pos)
             delivered = task.try_deliver(npc.name, npc.grid_pos)
@@ -1078,7 +1325,7 @@ class GameManager:
             self.player_task = self._new_task("Player")
 
         result = self.pathfinder.find_path(
-            self.player.grid_pos,
+            self._movement_base_pos(self.player),
             self.player_task.target_pos,
             self.settings.selected_algorithm,
         )
@@ -1092,7 +1339,7 @@ class GameManager:
         if self.state == GameState.MENU:
             self._draw_menu()
 
-        elif self.state == GameState.PLAYING:
+        elif self.state in (GameState.PLAYING, GameState.SIMULATION):
             self._draw_game()
 
         elif self.state == GameState.PAUSED:
@@ -1138,7 +1385,7 @@ class GameManager:
             logo = pygame.transform.smoothscale(self.ui_logo, (logo_w, logo_h))
             logo_rect = logo.get_rect()
             logo_rect.centerx = SCREEN_WIDTH // 2
-            logo_rect.y = 55
+            logo_rect.y = 15
             self.screen.blit(logo, logo_rect)
         else:
             self._draw_text(
@@ -1163,17 +1410,25 @@ class GameManager:
 
         # Nhân vật chính thật to, lớn hơn nút Play
         if self.ui_shipper:
-            shipper_w = 620
-            shipper_h = 430
-            shipper = pygame.transform.smoothscale(self.ui_shipper, (shipper_w, shipper_h))
+            img_w, img_h = self.ui_shipper.get_size()
+            target_h = 430
+            target_w = int(img_w * (target_h / img_h)) if img_h > 0 else 620
+            shipper = pygame.transform.smoothscale(self.ui_shipper, (target_w, target_h))
             shipper_rect = shipper.get_rect()
             shipper_rect.left = 65
             shipper_rect.bottom = SCREEN_HEIGHT - 30
             self.screen.blit(shipper, shipper_rect)
 
         # Nút Play lớn nhưng nhỏ hơn shipper
-        play_w = 410
-        play_h = 145
+        button_w = 410
+        simulation_h = 138
+        self.simulation_button_rect = pygame.Rect(0, 0, button_w, simulation_h)
+        self.simulation_button_rect.right = SCREEN_WIDTH - 145
+        self.simulation_button_rect.bottom = SCREEN_HEIGHT - 246
+        self._draw_simulation_button(self.simulation_button_rect)
+
+        play_w = button_w
+        play_h = 132
         self.play_button_rect = pygame.Rect(0, 0, play_w, play_h)
         self.play_button_rect.right = SCREEN_WIDTH - 145
         self.play_button_rect.bottom = SCREEN_HEIGHT - 78
@@ -1194,10 +1449,10 @@ class GameManager:
 
         self._draw_static_icons()
 
-        if self.settings.show_path_hint:
+        if self.simulation_mode or self.settings.show_path_hint:
             self._draw_paths()
 
-        if self.player:
+        if not self.simulation_mode and self.player:
             self._draw_shipper_scaled(self.player)
 
         for npc in self.npc_shippers:
@@ -1206,7 +1461,10 @@ class GameManager:
         if self.settings.show_grid:
             self._draw_grid()
 
-        self._draw_hud_clean()
+        if self.simulation_mode:
+            self._draw_simulation_hud()
+        else:
+            self._draw_hud_clean()
 
     def _draw_shipper_scaled(self, shipper) -> None:
         sprite = shipper.sprites.get(shipper.direction) or shipper.sprites.get("idle")
@@ -1245,7 +1503,7 @@ class GameManager:
         for pos in self.house_positions:
             self._draw_icon("house", pos)
 
-        if self.player_task and not self.player_task.delivered:
+        if not self.simulation_mode and self.player_task and not self.player_task.delivered:
             self._draw_target_marker(self.player_task.target_pos)
 
     def _draw_target_marker(self, grid_pos: Tuple[int, int]) -> None:
@@ -1254,14 +1512,25 @@ class GameManager:
         pygame.draw.rect(self.screen, (255, 235, 60), (x + 2, y + 2, cell_w - 4, cell_h - 4), width=3, border_radius=6)
 
     def _draw_paths(self) -> None:
-        self._draw_path(self.player_path_hint, (255, 245, 50), radius=4)
+        if not self.simulation_mode:
+            self._draw_path(self.player_path_hint, (255, 245, 50), radius=4, width=4, glow=True)
+            return
 
-        colors = [(255, 80, 80), (80, 255, 120), (255, 180, 70), (180, 120, 255)]
+        colors = [(255, 80, 80), (60, 235, 125), (255, 180, 55), (165, 125, 255)]
 
         for i, npc in enumerate(self.npc_shippers):
-            self._draw_path(self.npc_paths.get(npc.name, []), colors[i % len(colors)], radius=3)
+            path = [self._movement_base_pos(npc)] + list(self.npc_paths.get(npc.name, []))
+            self._draw_path(path, colors[i % len(colors)], radius=5, width=5, glow=True)
+            self._draw_algorithm_label(npc, colors[i % len(colors)])
 
-    def _draw_path(self, path: List[Tuple[int, int]], color: Tuple[int, int, int], radius: int = 3) -> None:
+    def _draw_path(
+        self,
+        path: List[Tuple[int, int]],
+        color: Tuple[int, int, int],
+        radius: int = 3,
+        width: int = 3,
+        glow: bool = False,
+    ) -> None:
         if not path:
             return
 
@@ -1273,10 +1542,32 @@ class GameManager:
             points.append((x + cell_w // 2, y + cell_h // 2))
 
         if len(points) >= 2:
-            pygame.draw.lines(self.screen, color, False, points, 3)
+            if glow:
+                pygame.draw.lines(self.screen, (20, 20, 24), False, points, width + 5)
+                glow_color = tuple(min(255, int(c * 0.65 + 70)) for c in color)
+                pygame.draw.lines(self.screen, glow_color, False, points, width + 2)
+
+            pygame.draw.lines(self.screen, color, False, points, width)
 
         for point in points:
+            if glow:
+                pygame.draw.circle(self.screen, (20, 20, 24), point, radius + 3)
             pygame.draw.circle(self.screen, color, point, radius)
+
+    def _draw_algorithm_label(self, npc, color: Tuple[int, int, int]) -> None:
+        x, y = self._grid_to_screen(npc.grid_pos)
+        cell_w, cell_h = self._cell_size_screen()
+        label = str(getattr(npc, "algorithm", npc.name))
+        text = self.font_tiny.render(label, True, (255, 255, 255))
+        pad_x, pad_y = 6, 3
+        rect = pygame.Rect(x, y - 22, text.get_width() + pad_x * 2, text.get_height() + pad_y * 2)
+        rect.centerx = x + cell_w // 2
+
+        panel = pygame.Surface((rect.width, rect.height), pygame.SRCALPHA)
+        panel.fill((10, 14, 22, 165))
+        self.screen.blit(panel, (rect.x, rect.y))
+        pygame.draw.rect(self.screen, color, rect, width=2, border_radius=5)
+        self.screen.blit(text, (rect.x + pad_x, rect.y + pad_y))
 
     def _draw_icon(self, icon_name: str, grid_pos: Tuple[int, int]) -> None:
         x, y = self._grid_to_screen(grid_pos)
@@ -1306,6 +1597,30 @@ class GameManager:
 
         for y in range(0, SCREEN_HEIGHT + 1, max(1, cell_h)):
             pygame.draw.line(self.screen, GRID_LINE_COLOR, (0, y), (SCREEN_WIDTH, y), 1)
+
+    def _draw_simulation_hud(self) -> None:
+        top_bar = pygame.Rect(0, 0, SCREEN_WIDTH, 34)
+        self._draw_panel(top_bar, alpha=115, border=False)
+        text = f"SIMULATION | Map {self.settings.selected_map_id} | Time {self.elapsed_time:05.1f}s | ESC Pause | P Path | G Grid"
+        self._draw_text(text, self.font_tiny, (255, 255, 255), 10, 9)
+
+        board_w = 385
+        row_h = 27
+        board_h = 42 + len(self.npc_shippers) * row_h
+        board = pygame.Rect(SCREEN_WIDTH - board_w - 12, 48, board_w, board_h)
+        self._draw_panel(board, alpha=135, border=True)
+        self._draw_text("ALGORITHM GROUPS", self.font_small, (255, 230, 110), board.x + 12, board.y + 10)
+
+        colors = [(255, 80, 80), (60, 235, 125), (255, 180, 55), (165, 125, 255)]
+        y = board.y + 38
+        for i, npc in enumerate(self.npc_shippers):
+            color = colors[i % len(colors)]
+            pygame.draw.circle(self.screen, color, (board.x + 18, y + 8), 6)
+            task = self.npc_tasks.get(npc.name)
+            target = task.target_pos if task else "-"
+            label = f"{npc.name}: {getattr(npc, 'algorithm', '')} -> {target}"
+            self._draw_text(label, self.font_tiny, (245, 245, 245), board.x + 34, y)
+            y += row_h
 
     def _draw_hud_clean(self) -> None:
         """
@@ -1484,10 +1799,12 @@ class GameManager:
         self.result_logged = False
         self.winner_name = ""
         self.auto_player_enabled = False
+        self.move_dir = (0, 0)
+        self._player_last_trap_penalty_pos = None
 
         self._create_shipper_objects()
 
-        self.player_task = self._new_task("Player")
+        self.player_task = None if self.simulation_mode else self._new_task("Player")
         self.npc_tasks = {}
         self.npc_paths = {}
         self.npc_expanded = {}
@@ -1501,7 +1818,11 @@ class GameManager:
             npc.money = 0
             npc.orders = 0
 
-        self._refresh_player_path_hint()
+        if self.simulation_mode:
+            self.player_path_hint = []
+            self.player_path_expanded = 0
+        else:
+            self._refresh_player_path_hint()
 
 
 
@@ -1587,435 +1908,4 @@ try:
 except Exception:
     pass
 
-
-
-
-# =========================================================
-# PATH ALIGNMENT + PICKUP FREEZE PATCH
-# =========================================================
-
-def _sdg_normalize_path_for_current_pos(self):
-    """
-    Remove repeated current-cell at the beginning of path arrays.
-    This prevents auto movement from freezing after pickup.
-    """
-    try:
-        current = tuple(self.player.grid_pos)
-    except Exception:
-        return
-
-    for attr in ("player_path", "player_path_hint", "path_hint"):
-        path = getattr(self, attr, None)
-
-        if isinstance(path, list):
-            while path and tuple(path[0]) == current:
-                path.pop(0)
-
-            setattr(self, attr, path)
-
-
-try:
-    _SDG_ORIGINAL_REFRESH_PATH_HINT = GameManager._refresh_player_path_hint
-
-    def _sdg_refresh_player_path_hint_fixed(self, *args, **kwargs):
-        result = _SDG_ORIGINAL_REFRESH_PATH_HINT(self, *args, **kwargs)
-        _sdg_normalize_path_for_current_pos(self)
-        return result
-
-    if not getattr(GameManager, "_sdg_refresh_path_patch_applied", False):
-        GameManager._refresh_player_path_hint = _sdg_refresh_player_path_hint_fixed
-        GameManager._sdg_refresh_path_patch_applied = True
-
-except Exception:
-    pass
-
-
-try:
-    _SDG_ORIGINAL_UPDATE_SMOOTH_ENTITIES = GameManager._update_smooth_entities
-
-    def _sdg_update_smooth_entities_fixed(self, dt):
-        _sdg_normalize_path_for_current_pos(self)
-        return _SDG_ORIGINAL_UPDATE_SMOOTH_ENTITIES(self, dt)
-
-    if not getattr(GameManager, "_sdg_update_smooth_patch_applied", False):
-        GameManager._update_smooth_entities = _sdg_update_smooth_entities_fixed
-        GameManager._sdg_update_smooth_patch_applied = True
-
-except Exception:
-    pass
-
-
-try:
-    _SDG_ORIGINAL_DRAW_SHIPPER_SCALED = GameManager._draw_shipper_scaled
-
-    def _sdg_draw_shipper_scaled_centered(self, shipper, *args, **kwargs):
-        """
-        Force shipper sprite to render at the center of its grid cell.
-        If anything fails, fall back to original draw method.
-        """
-        try:
-            tile_size = globals().get("TILE_SIZE", 32)
-
-            center_x = int(round(shipper.pixel_x + tile_size / 2))
-            center_y = int(round(shipper.pixel_y + tile_size / 2))
-
-            sprite = None
-
-            if hasattr(shipper, "_current_sprite"):
-                sprite = shipper._current_sprite()
-
-            if sprite is None and hasattr(shipper, "sprites"):
-                sprite = (
-                    shipper.sprites.get(getattr(shipper, "direction", "down"))
-                    or shipper.sprites.get("idle")
-                    or shipper.sprites.get("right")
-                    or shipper.sprites.get("down")
-                )
-
-            if sprite is not None:
-                # Keep sprite readable but not too large.
-                max_size = int(tile_size * 1.25)
-                w, h = sprite.get_size()
-
-                if w > max_size or h > max_size:
-                    ratio = min(max_size / w, max_size / h)
-                    sprite = pygame.transform.smoothscale(
-                        sprite,
-                        (max(1, int(w * ratio)), max(1, int(h * ratio))),
-                    )
-
-                rect = sprite.get_rect(center=(center_x, center_y))
-                self.screen.blit(sprite, rect)
-                return
-
-        except Exception:
-            pass
-
-        return _SDG_ORIGINAL_DRAW_SHIPPER_SCALED(self, shipper, *args, **kwargs)
-
-    if not getattr(GameManager, "_sdg_draw_shipper_center_patch_applied", False):
-        GameManager._draw_shipper_scaled = _sdg_draw_shipper_scaled_centered
-        GameManager._sdg_draw_shipper_center_patch_applied = True
-
-except Exception:
-    pass
-
-
-
-
-# =========================================================
-# AUTO PATH STEP FIX
-# - Player only follows path when auto_player_enabled = True.
-# - NPCs always try to follow their path.
-# - Removes current-cell duplicates at the beginning of paths.
-# - If a path step is not adjacent, recalculates a small BFS path on the grid.
-# =========================================================
-
-from collections import deque
-
-def _sdg_entity_current(entity):
-    try:
-        return tuple(entity.grid_pos)
-    except Exception:
-        return None
-
-
-def _sdg_is_adjacent(a, b):
-    if a is None or b is None:
-        return False
-
-    return abs(int(a[0]) - int(b[0])) + abs(int(a[1]) - int(b[1])) == 1
-
-
-def _sdg_is_walkable_cell(code):
-    # Current TMX convention:
-    # 0 road, 2 store, 3 house, 4 trap, 6 bridge, 7 roundabout are walkable.
-    # 1 is blocked.
-    return code in (0, 2, 3, 4, 6, 7)
-
-
-def _sdg_get_grid(self):
-    for attr in ("grid", "map_grid", "current_grid"):
-        grid = getattr(self, attr, None)
-
-        if isinstance(grid, list) and grid and isinstance(grid[0], list):
-            return grid
-
-    for attr in ("map_data", "tmx_data", "current_map", "game_map"):
-        data = getattr(self, attr, None)
-
-        if data is None:
-            continue
-
-        grid = getattr(data, "grid", None)
-
-        if isinstance(grid, list) and grid and isinstance(grid[0], list):
-            return grid
-
-    return None
-
-
-def _sdg_bfs_next_path(self, start, goal):
-    grid = _sdg_get_grid(self)
-
-    if not grid:
-        return []
-
-    h = len(grid)
-    w = len(grid[0])
-
-    start = (int(start[0]), int(start[1]))
-    goal = (int(goal[0]), int(goal[1]))
-
-    if not (0 <= start[0] < w and 0 <= start[1] < h):
-        return []
-
-    if not (0 <= goal[0] < w and 0 <= goal[1] < h):
-        return []
-
-    if not _sdg_is_walkable_cell(grid[goal[1]][goal[0]]):
-        return []
-
-    q = deque([start])
-    parent = {start: None}
-
-    while q:
-        x, y = q.popleft()
-
-        if (x, y) == goal:
-            break
-
-        for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
-            if not (0 <= nx < w and 0 <= ny < h):
-                continue
-
-            if (nx, ny) in parent:
-                continue
-
-            if not _sdg_is_walkable_cell(grid[ny][nx]):
-                continue
-
-            parent[(nx, ny)] = (x, y)
-            q.append((nx, ny))
-
-    if goal not in parent:
-        return []
-
-    path = []
-    cur = goal
-
-    while cur is not None:
-        path.append(cur)
-        cur = parent[cur]
-
-    path.reverse()
-    return path
-
-
-def _sdg_clean_and_step_path(self, entity, path):
-    if entity is None or path is None:
-        return False
-
-    if not isinstance(path, list):
-        return False
-
-    current = _sdg_entity_current(entity)
-
-    if current is None:
-        return False
-
-    # Remove repeated current cell at the beginning.
-    while path and tuple(path[0]) == current:
-        path.pop(0)
-
-    if not path:
-        return False
-
-    next_pos = tuple(path[0])
-
-    # If next step is not adjacent, rebuild path to the target.
-    if not _sdg_is_adjacent(current, next_pos):
-        target = tuple(path[-1])
-        rebuilt = _sdg_bfs_next_path(self, current, target)
-
-        if rebuilt:
-            path[:] = rebuilt
-
-            while path and tuple(path[0]) == current:
-                path.pop(0)
-
-            if not path:
-                return False
-
-            next_pos = tuple(path[0])
-
-    if not _sdg_is_adjacent(current, next_pos):
-        return False
-
-    if getattr(entity, "is_moving", False):
-        return False
-
-    moved = False
-
-    if hasattr(entity, "move_to_grid"):
-        moved = bool(entity.move_to_grid(next_pos))
-    elif hasattr(entity, "move_to"):
-        moved = bool(entity.move_to(next_pos))
-
-    if moved:
-        # Remove command step immediately after movement starts.
-        if path and tuple(path[0]) == next_pos:
-            path.pop(0)
-
-    return moved
-
-
-def _sdg_get_player_path(self):
-    for attr in (
-        "player_path",
-        "player_path_hint",
-        "path_hint",
-        "current_player_path",
-        "auto_player_path",
-    ):
-        path = getattr(self, attr, None)
-
-        if isinstance(path, list):
-            return path
-
-    return None
-
-
-def _sdg_get_npc_path(self, npc):
-    name = getattr(npc, "name", None)
-
-    # Common dictionary path storage.
-    for attr in (
-        "npc_paths",
-        "npc_path_hints",
-        "npc_routes",
-        "npc_path",
-        "npc_current_paths",
-    ):
-        data = getattr(self, attr, None)
-
-        if isinstance(data, dict):
-            for key in (name, npc):
-                if key in data and isinstance(data[key], list):
-                    return data[key]
-
-    # Rare direct list on npc object.
-    for attr in ("path", "route", "current_path"):
-        path = getattr(npc, attr, None)
-
-        if isinstance(path, list):
-            return path
-
-    # Last fallback: scan dictionaries with "path" in name.
-    for attr, data in self.__dict__.items():
-        if "path" not in attr.lower():
-            continue
-
-        if isinstance(data, dict):
-            for key in (name, npc):
-                if key in data and isinstance(data[key], list):
-                    return data[key]
-
-    return None
-
-
-try:
-    _SDG_ORIGINAL_UPDATE_SMOOTH_ENTITIES_AUTOSTEP = GameManager._update_smooth_entities
-
-    def _sdg_update_smooth_entities_autostep(self, dt):
-        # Run original logic first, so pickup/delivery/stats still work.
-        result = _SDG_ORIGINAL_UPDATE_SMOOTH_ENTITIES_AUTOSTEP(self, dt)
-
-        # Player auto movement only works when SPACE / auto mode is enabled.
-        if getattr(self, "auto_player_enabled", False):
-            player = getattr(self, "player", None)
-            player_path = _sdg_get_player_path(self)
-
-            if player is not None and player_path is not None:
-                _sdg_clean_and_step_path(self, player, player_path)
-
-        # NPC movement should always run.
-        for npc in getattr(self, "npc_shippers", []):
-            npc_path = _sdg_get_npc_path(self, npc)
-
-            if npc_path is not None:
-                _sdg_clean_and_step_path(self, npc, npc_path)
-
-        return result
-
-    if not getattr(GameManager, "_sdg_auto_step_patch_applied", False):
-        GameManager._update_smooth_entities = _sdg_update_smooth_entities_autostep
-        GameManager._sdg_auto_step_patch_applied = True
-
-except Exception as exc:
-    print(f"[WARN] Auto path step patch failed: {exc}")
-
-
-# Make sure path refresh removes current cell.
-try:
-    _SDG_ORIGINAL_REFRESH_PLAYER_PATH_AUTOSTEP = GameManager._refresh_player_path_hint
-
-    def _sdg_refresh_player_path_hint_autostep(self, *args, **kwargs):
-        result = _SDG_ORIGINAL_REFRESH_PLAYER_PATH_AUTOSTEP(self, *args, **kwargs)
-        path = _sdg_get_player_path(self)
-        player = getattr(self, "player", None)
-
-        if player is not None and isinstance(path, list):
-            current = _sdg_entity_current(player)
-
-            while path and tuple(path[0]) == current:
-                path.pop(0)
-
-        return result
-
-    if not getattr(GameManager, "_sdg_refresh_player_path_autostep_patch_applied", False):
-        GameManager._refresh_player_path_hint = _sdg_refresh_player_path_hint_autostep
-        GameManager._sdg_refresh_player_path_autostep_patch_applied = True
-
-except Exception:
-    pass
-
-
-
-
-# =========================================================
-# NPC SMOOTH QUEUE PATCH
-# This patch prevents NPCs from stuttering by avoiding repeated
-# step rejection while they are already moving.
-# =========================================================
-
-def _sdg_npc_smooth_clear_bad_queue(self):
-    try:
-        for npc in getattr(self, "npc_shippers", []):
-            if hasattr(npc, "queued_grid_pos"):
-                q = getattr(npc, "queued_grid_pos", None)
-
-                if q is not None and getattr(npc, "target_grid_pos", None) is not None:
-                    tx, ty = npc.target_grid_pos
-                    qx, qy = q
-
-                    if abs(int(qx) - int(tx)) + abs(int(qy) - int(ty)) != 1:
-                        npc.queued_grid_pos = None
-    except Exception:
-        pass
-
-
-try:
-    _SDG_ORIGINAL_UPDATE_SMOOTH_NPC_QUEUE = GameManager._update_smooth_entities
-
-    def _sdg_update_smooth_entities_npc_queue(self, dt):
-        _sdg_npc_smooth_clear_bad_queue(self)
-        return _SDG_ORIGINAL_UPDATE_SMOOTH_NPC_QUEUE(self, dt)
-
-    if not getattr(GameManager, "_sdg_npc_queue_patch_applied", False):
-        GameManager._update_smooth_entities = _sdg_update_smooth_entities_npc_queue
-        GameManager._sdg_npc_queue_patch_applied = True
-
-except Exception as exc:
-    print(f"[WARN] NPC smooth queue patch failed: {exc}")
 

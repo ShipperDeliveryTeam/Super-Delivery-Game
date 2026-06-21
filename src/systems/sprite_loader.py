@@ -1,6 +1,7 @@
 from pathlib import Path
 from typing import Optional, Tuple
 
+# pyrefly: ignore [missing-import]
 import pygame
 
 
@@ -58,8 +59,33 @@ class SpriteLoader:
         - down
         - idle
 
-        Nếu chỉ có ảnh ngang Shipper.png thì tự flip trái/phải.
+        Hỗ trợ 2 kiểu:
+        1. Ảnh rõ từng hướng (down, up, left, right)
+        2. Ảnh cũ (side, front, back) tự lật trái/phải.
         """
+        # Thử lấy hướng rõ ràng trước
+        up_img = paths.get("up")
+        down_img = paths.get("down")
+        left_img = paths.get("left")
+        right_img = paths.get("right")
+        idle_img = paths.get("idle")
+
+        if any([up_img, down_img, left_img, right_img]):
+            down = self.load_image(down_img, size=size, fallback_color=fallback_color, fallback_text=label)
+            up = self.load_image(up_img, size=size, fallback_color=fallback_color, fallback_text=label)
+            left = self.load_image(left_img, size=size, fallback_color=fallback_color, fallback_text=label)
+            right = self.load_image(right_img, size=size, fallback_color=fallback_color, fallback_text=label)
+            idle = self.load_image(idle_img, size=size, fallback_color=fallback_color, fallback_text=label)
+            
+            return {
+                "left": left,
+                "right": right,
+                "up": up,
+                "down": down,
+                "idle": idle,
+            }
+
+        # Fallback về cách cũ (dùng side, front, back)
         side = self.load_image(
             paths.get("side"),
             size=size,

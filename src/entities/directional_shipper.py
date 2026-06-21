@@ -51,6 +51,7 @@ class DirectionalShipper:
 
         self.direction = "down"
         self.is_moving = False
+        self.allow_diagonal = bool(kwargs.get("allow_diagonal", False))
 
         self.money = int(kwargs.get("money", 0))
         self.orders = int(kwargs.get("orders", 0))
@@ -156,13 +157,23 @@ class DirectionalShipper:
     # Movement
     # =====================================================
     def _is_adjacent(self, a, b):
-        return abs(int(a[0]) - int(b[0])) + abs(int(a[1]) - int(b[1])) == 1
+        dx = abs(int(a[0]) - int(b[0]))
+        dy = abs(int(a[1]) - int(b[1]))
 
-    def move_grid(self, dx, dy, max_cols, max_rows, min_y=0):
+        if self.allow_diagonal:
+            return max(dx, dy) == 1 and dx + dy > 0
+
+        return dx + dy == 1
+
+    def move_grid(self, dx, dy, max_cols, max_rows, min_y=0, allow_diagonal=None):
         dx = int(dx)
         dy = int(dy)
+        allow_diagonal = self.allow_diagonal if allow_diagonal is None else bool(allow_diagonal)
 
-        if abs(dx) + abs(dy) != 1:
+        if allow_diagonal:
+            if max(abs(dx), abs(dy)) != 1 or (dx == 0 and dy == 0):
+                return False
+        elif abs(dx) + abs(dy) != 1:
             return False
 
         # If currently moving, queue from current target.
@@ -174,13 +185,14 @@ class DirectionalShipper:
         if (nx, ny) == base:
             return True
 
-        return self.move_to_grid((nx, ny))
+        return self.move_to_grid((nx, ny), allow_diagonal=allow_diagonal)
 
-    def move_to_grid(self, pos):
+    def move_to_grid(self, pos, allow_diagonal=None):
         """
         Move/queue one adjacent grid cell.
         """
         pos = (int(pos[0]), int(pos[1]))
+        allow_diagonal = self.allow_diagonal if allow_diagonal is None else bool(allow_diagonal)
 
         # Current cell: not an error. Return True so path code can consume it.
         if pos == self._grid_pos and not self.is_moving:
@@ -192,7 +204,12 @@ class DirectionalShipper:
                 return True
 
             # Queue next step if it is adjacent to the current target.
-            if self._is_adjacent(self.target_grid_pos, pos):
+            old_allow_diagonal = self.allow_diagonal
+            self.allow_diagonal = allow_diagonal
+            is_adjacent_to_target = self._is_adjacent(self.target_grid_pos, pos)
+            self.allow_diagonal = old_allow_diagonal
+
+            if is_adjacent_to_target:
                 self.queued_grid_pos = pos
                 return True
 
@@ -205,7 +222,12 @@ class DirectionalShipper:
         dx = pos[0] - self._grid_pos[0]
         dy = pos[1] - self._grid_pos[1]
 
-        if abs(dx) + abs(dy) != 1:
+        if allow_diagonal:
+            is_valid_step = max(abs(dx), abs(dy)) == 1 and abs(dx) + abs(dy) > 0
+        else:
+            is_valid_step = abs(dx) + abs(dy) == 1
+
+        if not is_valid_step:
             return False
 
         self.set_direction_from_delta(dx, dy)
