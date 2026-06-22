@@ -5,6 +5,8 @@ from typing import Any
 
 import pygame
 
+from src.gameplay.roundabout_geometry import build_roundabout_curve, curve_length, curve_point, edge_key
+
 
 class DirectionalShipper:
     """
@@ -52,6 +54,12 @@ class DirectionalShipper:
         self.direction = "down"
         self.is_moving = False
         self.allow_diagonal = bool(kwargs.get("allow_diagonal", False))
+        self.roundabout_center = None
+        self.roundabout_ring = ()
+        self._roundabout_ring_index = {}
+        self.roundabout_connections = ()
+        self._roundabout_connection_edges = set()
+        self._curve_motion = None
 
         self.money = int(kwargs.get("money", 0))
         self.orders = int(kwargs.get("orders", 0))
@@ -136,6 +144,7 @@ class DirectionalShipper:
         self.pixel_x = float(pos[0] * self.tile_size)
         self.pixel_y = float(pos[1] * self.tile_size)
         self.is_moving = False
+        self._curve_motion = None
 
     def set_grid_pos(self, pos):
         self.set_grid_position(pos)
@@ -152,6 +161,17 @@ class DirectionalShipper:
         self.queued_grid_pos = None
         self.pixel_x = float(self._grid_pos[0] * self.tile_size)
         self.pixel_y = float(self._grid_pos[1] * self.tile_size)
+        self._curve_motion = None
+
+    def configure_roundabout(self, center, ring, connections=()):
+        self.roundabout_center = (float(center[0]), float(center[1])) if center else None
+        self.roundabout_ring = tuple((int(x), int(y)) for x, y in (ring or ()))
+        self._roundabout_ring_index = {pos: index for index, pos in enumerate(self.roundabout_ring)}
+        self.roundabout_connections = tuple(
+            ((int(a[0]), int(a[1])), (int(b[0]), int(b[1])))
+            for a, b in (connections or ())
+        )
+        self._roundabout_connection_edges = {edge_key(a, b) for a, b in self.roundabout_connections}
 
     # =====================================================
     # Movement
@@ -230,10 +250,7 @@ class DirectionalShipper:
         if not is_valid_step:
             return False
 
-        self.set_direction_from_delta(dx, dy)
-        self.target_grid_pos = pos
-        self.is_moving = True
-        return True
+        return self._begin_motion(pos)
 
     def move_to(self, pos):
         return self.move_to_grid(pos)
@@ -251,16 +268,63 @@ class DirectionalShipper:
         if not self._is_adjacent(self._grid_pos, next_pos):
             return False
 
-        dx = next_pos[0] - self._grid_pos[0]
-        dy = next_pos[1] - self._grid_pos[1]
+        return self._begin_motion(next_pos)
+
+    def _begin_motion(self, pos):
+        dx = pos[0] - self._grid_pos[0]
+        dy = pos[1] - self._grid_pos[1]
 
         self.set_direction_from_delta(dx, dy)
-        self.target_grid_pos = next_pos
+        self.target_grid_pos = pos
+        self._curve_motion = self._make_roundabout_curve(self._grid_pos, pos)
         self.is_moving = True
         return True
 
+    def _is_roundabout_edge(self, start, end):
+        if start not in self._roundabout_ring_index or end not in self._roundabout_ring_index:
+            return False
+
+        size = len(self.roundabout_ring)
+        first = self._roundabout_ring_index[start]
+        second = self._roundabout_ring_index[end]
+        return (first - second) % size == 1 or (second - first) % size == 1
+
+    def _make_roundabout_curve(self, start, end):
+        curve = build_roundabout_curve(
+            start,
+            end,
+            self.roundabout_center,
+            self.roundabout_ring,
+            self.roundabout_connections,
+        )
+
+        if curve is None:
+            return None
+
+        curve["elapsed"] = 0.0
+        curve["duration"] = max(0.01, curve_length(curve) * self.tile_size / self.speed_px)
+        return curve
+
     def update(self, dt):
         if not self.is_moving:
+            return
+
+        if self._curve_motion is not None:
+            curve = self._curve_motion
+            curve["elapsed"] += float(dt)
+            t = min(1.0, curve["elapsed"] / curve["duration"])
+            grid_x, grid_y = curve_point(curve, t)
+            self.pixel_x = grid_x * self.tile_size
+            self.pixel_y = grid_y * self.tile_size
+
+            if t >= 1.0:
+                self.pixel_x = float(self.target_grid_pos[0] * self.tile_size)
+                self.pixel_y = float(self.target_grid_pos[1] * self.tile_size)
+                self._grid_pos = self.target_grid_pos
+                self.is_moving = False
+                self._curve_motion = None
+                self._begin_queued_move_if_any()
+
             return
 
         target_x = self.target_grid_pos[0] * self.tile_size

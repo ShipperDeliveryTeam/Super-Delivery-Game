@@ -25,6 +25,7 @@ from .settings import GameSettings
 from src.ai.game_pathfinder import GamePathfinder
 from src.gameplay.delivery_task import DeliveryTask
 from src.gameplay.order_generator import OrderGenerator
+from src.gameplay.roundabout_geometry import build_roundabout_curve, curve_point
 from src.maps.matrix_loader import MatrixLoader
 from src.maps.tmx_loader import TmxMapLoader
 from src.systems.stats_logger import StatsLogger, GameStatsRecord
@@ -112,7 +113,14 @@ class GameManager:
         self.player_spawn: Tuple[int, int] = (3, 3)
         self.npc_spawns: list[Tuple[int, int]] = []
 
-        self.pathfinder = GamePathfinder(GRID_COLS, GRID_ROWS, set(), allow_diagonal=self._allow_diagonal_movement())
+        self.pathfinder = GamePathfinder(
+            GRID_COLS,
+            GRID_ROWS,
+            set(),
+            allow_diagonal=self._allow_diagonal_movement(),
+            roundabout_ring=self._roundabout_ring(),
+            roundabout_connections=self._roundabout_connections(),
+        )
 
         self.player: Optional[DirectionalShipper] = None
         self.player_task: Optional[DeliveryTask] = None
@@ -165,6 +173,42 @@ class GameManager:
 
     def _allow_diagonal_movement(self) -> bool:
         return self.settings.selected_map_id == 2
+
+    def _roundabout_center(self) -> tuple[float, float] | None:
+        return (23.5, 16.5) if self.settings.selected_map_id == 2 else None
+
+    def _roundabout_ring(self) -> tuple[Tuple[int, int], ...]:
+        if self.settings.selected_map_id != 2:
+            return ()
+
+        return (
+            (22, 14),
+            (23, 14),
+            (24, 14),
+            (25, 15),
+            (26, 16),
+            (26, 17),
+            (25, 18),
+            (24, 19),
+            (23, 19),
+            (22, 18),
+            (21, 17),
+            (21, 16),
+            (21, 15),
+        )
+
+    def _roundabout_connections(self) -> tuple[tuple[Tuple[int, int], Tuple[int, int]], ...]:
+        if self.settings.selected_map_id != 2:
+            return ()
+
+        return (
+            ((23, 13), (23, 14)),
+            ((23, 19), (23, 20)),
+            ((20, 15), (21, 16)),
+            ((20, 18), (21, 17)),
+            ((26, 16), (27, 15)),
+            ((26, 17), (27, 18)),
+        )
 
     def _load_ui_image(self, filename: str, size: tuple[int, int] | None = None):
         """
@@ -654,6 +698,32 @@ class GameManager:
             fallback_text="$",
         )
 
+        # Load location icons
+        self.icons["location_player"] = self.sprite_loader.load_image(
+            get_icon_path("location_shipper"),
+            size=(TILE_SIZE, TILE_SIZE),
+            fallback_color=(55, 120, 220),
+            fallback_text="LOC",
+        )
+        self.icons["location_npc1"] = self.sprite_loader.load_image(
+            get_icon_path("location_npc1"),
+            size=(TILE_SIZE, TILE_SIZE),
+            fallback_color=(220, 55, 55),
+            fallback_text="LOC1",
+        )
+        self.icons["location_npc2"] = self.sprite_loader.load_image(
+            get_icon_path("location_npc2"),
+            size=(TILE_SIZE, TILE_SIZE),
+            fallback_color=(55, 220, 55),
+            fallback_text="LOC2",
+        )
+        self.icons["location_npc3"] = self.sprite_loader.load_image(
+            get_icon_path("location_npc3"),
+            size=(TILE_SIZE, TILE_SIZE),
+            fallback_color=(220, 220, 55),
+            fallback_text="LOC3",
+        )
+
     def _load_simulation_button_image(self):
         path = get_icon_path("simulation")
 
@@ -724,6 +794,8 @@ class GameManager:
                     self.map_rows,
                     self.blocked_positions,
                     allow_diagonal=self._allow_diagonal_movement(),
+                    roundabout_ring=self._roundabout_ring(),
+                    roundabout_connections=self._roundabout_connections(),
                 )
                 self.map_source = f"TMX: {tmx_path.name}"
                 self._ensure_minimum_positions()
@@ -758,6 +830,8 @@ class GameManager:
             self.map_rows,
             self.blocked_positions,
             allow_diagonal=self._allow_diagonal_movement(),
+            roundabout_ring=self._roundabout_ring(),
+            roundabout_connections=self._roundabout_connections(),
         )
         self.map_source = f"CSV: {matrix_path.name}"
         self._load_png_map_background()
@@ -854,6 +928,11 @@ class GameManager:
 
         self.player = DirectionalShipper("Player", self.player_spawn, player_sprites, TILE_SIZE)
         self.player.allow_diagonal = self._allow_diagonal_movement()
+        self.player.configure_roundabout(
+            self._roundabout_center(),
+            self._roundabout_ring(),
+            self._roundabout_connections(),
+        )
 
         self.npc_shippers = []
         default_positions = [(8, 8), (14, 10), (20, 12)]
@@ -873,6 +952,11 @@ class GameManager:
             npc = DirectionalShipper(f"NPC {i + 1}", pos, npc_sprites, TILE_SIZE)
             npc.algorithm = algorithms[i]
             npc.allow_diagonal = self._allow_diagonal_movement()
+            npc.configure_roundabout(
+                self._roundabout_center(),
+                self._roundabout_ring(),
+                self._roundabout_connections(),
+            )
             self.npc_shippers.append(npc)
 
     def run(self) -> None:
@@ -1032,7 +1116,7 @@ class GameManager:
         dx = next_pos[0] - base_pos[0]
         dy = next_pos[1] - base_pos[1]
 
-        if not self.pathfinder._can_step(base_pos, next_pos):
+        if not self.pathfinder.can_step(base_pos, next_pos):
             self._refresh_player_path_hint()
             return
 
@@ -1220,7 +1304,7 @@ class GameManager:
         if next_pos == (base_x, base_y):
             return True
 
-        if not self.pathfinder.is_walkable(next_pos) or not self.pathfinder._can_step((base_x, base_y), next_pos):
+        if not self.pathfinder.can_step((base_x, base_y), next_pos):
             return False
 
         shipper.allow_diagonal = allow_diagonal
@@ -1461,10 +1545,51 @@ class GameManager:
         if self.settings.show_grid:
             self._draw_grid()
 
+        # Draw bouncing location pins for active tasks
+        self._draw_active_locations()
+
         if self.simulation_mode:
             self._draw_simulation_hud()
         else:
             self._draw_hud_clean()
+
+    def _draw_active_locations(self) -> None:
+        import math
+        import pygame
+
+        time_ticks = pygame.time.get_ticks()
+        bounce_offset = abs(math.sin(time_ticks * 0.005)) * 10  # Jump height up to 10 pixels
+
+        # Draw for Player
+        if not self.simulation_mode and getattr(self, 'player_task', None) and not self.player_task.delivered:
+            self._draw_bouncing_location("location_player", self.player_task.target_pos, bounce_offset)
+
+        # Draw for NPCs
+        if hasattr(self, 'npc_tasks'):
+            for i, npc in enumerate(self.npc_shippers):
+                task = self.npc_tasks.get(npc.name)
+                if task and not task.delivered:
+                    icon_name = f"location_npc{i + 1}"
+                    if icon_name not in self.icons:
+                        icon_name = "location_npc1" # Fallback
+                    self._draw_bouncing_location(icon_name, task.target_pos, bounce_offset)
+
+    def _draw_bouncing_location(self, icon_name: str, grid_pos: Tuple[int, int], bounce_offset: float) -> None:
+        icon = self.icons.get(icon_name)
+        if not icon:
+            return
+
+        x, y = self._grid_to_screen(grid_pos)
+
+        # Center horizontally, and offset vertically by the bounce amount
+        # We also offset a bit up so the pin's bottom points to the center of the cell
+        cell_w, cell_h = self._cell_size_screen()
+        icon_w, icon_h = icon.get_size()
+
+        draw_x = x + (cell_w - icon_w) // 2
+        draw_y = y + (cell_h - icon_h) // 2 - int(bounce_offset) - (icon_h // 4)
+
+        self.screen.blit(icon, (draw_x, draw_y))
 
     def _draw_shipper_scaled(self, shipper) -> None:
         sprite = shipper.sprites.get(shipper.direction) or shipper.sprites.get("idle")
@@ -1497,14 +1622,8 @@ class GameManager:
                     pygame.draw.rect(self.screen, (150, 75, 35), rect)
 
     def _draw_static_icons(self) -> None:
-        for pos in self.store_positions:
-            self._draw_icon("store", pos)
-
-        for pos in self.house_positions:
-            self._draw_icon("house", pos)
-
-        if not self.simulation_mode and self.player_task and not self.player_task.delivered:
-            self._draw_target_marker(self.player_task.target_pos)
+        # User requested to remove S and H icons from the map, replaced by active bouncing locations
+        pass
 
     def _draw_target_marker(self, grid_pos: Tuple[int, int]) -> None:
         x, y = self._grid_to_screen(grid_pos)
@@ -1535,11 +1654,13 @@ class GameManager:
             return
 
         cell_w, cell_h = self._cell_size_screen()
-        points = []
+        anchor_points = []
 
         for gx, gy in path:
             x, y = self._grid_to_screen((gx, gy))
-            points.append((x + cell_w // 2, y + cell_h // 2))
+            anchor_points.append((x + cell_w // 2, y + cell_h // 2))
+
+        points = self._path_render_points(path, cell_w, cell_h)
 
         if len(points) >= 2:
             if glow:
@@ -1549,10 +1670,46 @@ class GameManager:
 
             pygame.draw.lines(self.screen, color, False, points, width)
 
-        for point in points:
+        for point in anchor_points:
             if glow:
                 pygame.draw.circle(self.screen, (20, 20, 24), point, radius + 3)
             pygame.draw.circle(self.screen, color, point, radius)
+
+    def _path_render_points(
+        self,
+        path: List[Tuple[int, int]],
+        cell_w: int,
+        cell_h: int,
+    ) -> list[tuple[int, int]]:
+        if not path:
+            return []
+
+        def screen_center(grid_x: float, grid_y: float) -> tuple[int, int]:
+            return (
+                int((grid_x + 0.5) * cell_w),
+                int((grid_y + 0.5) * cell_h),
+            )
+
+        output = [screen_center(*path[0])]
+        center = self._roundabout_center()
+
+        for start, end in zip(path, path[1:]):
+            curve = build_roundabout_curve(
+                start,
+                end,
+                center,
+                self._roundabout_ring(),
+                self._roundabout_connections(),
+            )
+
+            if curve is None:
+                output.append(screen_center(*end))
+                continue
+
+            for sample in range(1, 7):
+                output.append(screen_center(*curve_point(curve, sample / 6.0)))
+
+        return output
 
     def _draw_algorithm_label(self, npc, color: Tuple[int, int, int]) -> None:
         x, y = self._grid_to_screen(npc.grid_pos)

@@ -22,11 +22,23 @@ class GamePathfinder:
         rows: int,
         blocked: Optional[set[GridPos]] = None,
         allow_diagonal: bool = False,
+        roundabout_ring: Optional[Iterable[GridPos]] = None,
+        roundabout_connections: Optional[Iterable[tuple[GridPos, GridPos]]] = None,
     ):
         self.cols = cols
         self.rows = rows
         self.blocked = blocked or set()
         self.allow_diagonal = bool(allow_diagonal)
+        self.roundabout_ring = tuple(roundabout_ring or ())
+        self._roundabout_nodes = set(self.roundabout_ring)
+        self._roundabout_connection_edges = {
+            self._edge_key(a, b) for a, b in (roundabout_connections or ())
+        }
+        self._roundabout_edges = self._build_roundabout_edges()
+        self._roundabout_successor = {
+            current: self.roundabout_ring[(index - 1) % len(self.roundabout_ring)]
+            for index, current in enumerate(self.roundabout_ring)
+        } if self.roundabout_ring else {}
         self._diagonal_edges = self._build_diagonal_edges()
 
     def set_blocked(self, blocked: set[GridPos]) -> None:
@@ -264,7 +276,7 @@ class GamePathfinder:
         for dx, dy in directions:
             nxt = (x + dx, y + dy)
 
-            if self.is_walkable(nxt) and self._can_step(pos, nxt):
+            if self.can_step(pos, nxt):
                 yield nxt
 
     def is_walkable(self, pos: GridPos) -> bool:
@@ -293,6 +305,9 @@ class GamePathfinder:
         dy = end[1] - start[1]
 
         if abs(dx) <= 1 and abs(dy) <= 1 and (dx != 0 or dy != 0):
+            if self._edge_key(start, end) in self._roundabout_edges:
+                return True
+
             if dx == 0 or dy == 0:
                 return True
 
@@ -307,6 +322,42 @@ class GamePathfinder:
             return not self.is_walkable(horizontal_side) and not self.is_walkable(vertical_side)
 
         return False
+
+    def can_step(self, start: GridPos, end: GridPos) -> bool:
+        return (
+            self.is_walkable(start)
+            and self.is_walkable(end)
+            and self._roundabout_transition_allowed(start, end)
+            and self._can_step(start, end)
+        )
+
+    def is_roundabout_edge(self, start: GridPos, end: GridPos) -> bool:
+        if start not in self._roundabout_nodes or end not in self._roundabout_nodes:
+            return False
+
+        return self._edge_key(start, end) in self._roundabout_edges
+
+    def is_roundabout_connection(self, start: GridPos, end: GridPos) -> bool:
+        return self._edge_key(start, end) in self._roundabout_connection_edges
+
+    def _roundabout_transition_allowed(self, start: GridPos, end: GridPos) -> bool:
+        if start not in self._roundabout_nodes and end not in self._roundabout_nodes:
+            return True
+
+        if start in self._roundabout_nodes and end in self._roundabout_nodes:
+            return self._roundabout_successor.get(start) == end
+
+        return self._edge_key(start, end) in self._roundabout_connection_edges
+
+    def _build_roundabout_edges(self) -> set[tuple[GridPos, GridPos]]:
+        edges = set(self._roundabout_connection_edges)
+
+        if len(self.roundabout_ring) >= 2:
+            for index, current in enumerate(self.roundabout_ring):
+                following = self.roundabout_ring[(index + 1) % len(self.roundabout_ring)]
+                edges.add(self._edge_key(current, following))
+
+        return edges
 
     @staticmethod
     def _edge_key(a: GridPos, b: GridPos) -> tuple[GridPos, GridPos]:
