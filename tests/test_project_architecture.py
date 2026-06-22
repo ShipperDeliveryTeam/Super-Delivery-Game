@@ -34,8 +34,8 @@ class ProjectArchitectureTests(unittest.TestCase):
             SRC_ROOT / "gameplay" / "game_flow.py",
             SRC_ROOT / "gameplay" / "gameplay_controller.py",
             SRC_ROOT / "gameplay" / "movement_service.py",
-            SRC_ROOT / "gameplay" / "npc_controller.py",
-            SRC_ROOT / "gameplay" / "player_controller.py",
+            SRC_ROOT / "gameplay" / "auto" / "controller.py",
+            SRC_ROOT / "gameplay" / "play" / "controller.py",
             SRC_ROOT / "ui" / "button.py",
             SRC_ROOT / "ui" / "game_renderer.py",
             SRC_ROOT / "ui" / "hud.py",
@@ -63,7 +63,56 @@ class ProjectArchitectureTests(unittest.TestCase):
                     len(path.read_text(encoding="utf-8").splitlines()), 400
                 )
 
+    def test_play_and_auto_are_separate_gameplay_modules(self):
+        manager_source = (SRC_ROOT / "core" / "game_manager.py").read_text(
+            encoding="utf-8"
+        )
+        play_source = (
+            SRC_ROOT / "gameplay" / "play" / "controller.py"
+        ).read_text(encoding="utf-8")
+        auto_source = (
+            SRC_ROOT / "gameplay" / "auto" / "controller.py"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("PlayModeMixin", manager_source)
+        self.assertIn("AutoModeMixin", manager_source)
+        self.assertIn("_update_play_mode", play_source)
+        self.assertNotIn("def _update_auto_mode", play_source)
+        self.assertIn("_update_auto_mode", auto_source)
+        self.assertNotIn("def _update_play_mode", auto_source)
+
+    def test_replaced_legacy_modules_are_removed(self):
+        replaced_paths = [
+            SRC_ROOT / "gameplay" / "player_controller.py",
+            SRC_ROOT / "gameplay" / "npc_controller.py",
+            SRC_ROOT / "algorithms",
+            SRC_ROOT / "scripts",
+        ]
+
+        for path in replaced_paths:
+            with self.subTest(path=path.relative_to(PROJECT_ROOT)):
+                self.assertFalse(path.exists())
+
+    def test_future_extension_points_are_preserved(self):
+        extension_paths = [
+            SRC_ROOT / "ai" / "pathfinding",
+            SRC_ROOT / "ai" / "local_search",
+            SRC_ROOT / "ai" / "reinforcement",
+            SRC_ROOT / "entities" / "player.py",
+            SRC_ROOT / "entities" / "npc_shipper.py",
+            SRC_ROOT / "gameplay" / "level_manager.py",
+            SRC_ROOT / "gameplay" / "order_manager.py",
+            SRC_ROOT / "maps" / "collision.py",
+            SRC_ROOT / "maps" / "grid_map.py",
+            SRC_ROOT / "systems" / "animation.py",
+            SRC_ROOT / "systems" / "camera.py",
+            SRC_ROOT / "systems" / "sound_manager.py",
+        ]
+
+        for path in extension_paths:
+            with self.subTest(path=path.relative_to(PROJECT_ROOT)):
+                self.assertTrue(path.exists())
+
 
 if __name__ == "__main__":
     unittest.main()
-

@@ -4,6 +4,7 @@ import random
 from pathlib import Path
 from typing import List, Optional, Tuple
 
+# pyrefly: ignore [missing-import]
 import pygame
 
 from src.core.constants import (

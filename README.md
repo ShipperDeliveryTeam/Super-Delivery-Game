@@ -39,7 +39,7 @@ game.py               Điểm khởi chạy ứng dụng
 src/                  Mã nguồn Python
   core/               Game loop, command, cập nhật, cấu hình và sự kiện
   ai/                 Điều phối tìm đường và lựa chọn cửa hàng
-  gameplay/           Controller player/NPC, đơn hàng và luật chơi
+  gameplay/           Hai mode play/auto, đơn hàng và luật chơi dùng chung
   maps/               Quản lý map, đọc TMX và ma trận
   entities/           Thực thể có hình ảnh/chuyển động trong game
   systems/            Tải tài nguyên, sprite và thống kê

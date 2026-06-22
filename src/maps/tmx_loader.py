@@ -7,6 +7,7 @@ import csv
 import io
 import xml.etree.ElementTree as ET
 
+# pyrefly: ignore [missing-import]
 import pygame
 
 

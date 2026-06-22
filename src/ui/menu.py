@@ -284,15 +284,3 @@ class MenuMixin:
         if self.play_button_rect and self.play_button_rect.collidepoint(pos):
             self._start_play_mode()
             return
-
-    def _start_play_mode(self) -> None:
-        self.simulation_mode = False
-        self._reset_game()
-        self.state = GameState.PLAYING
-
-    def _start_simulation_mode(self) -> None:
-        self.simulation_mode = True
-        self._reset_game()
-        self.auto_player_enabled = False
-        self.player_path_hint = []
-        self.state = GameState.SIMULATION

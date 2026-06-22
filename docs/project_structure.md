@@ -1,7 +1,7 @@
 # Bản đồ cấu trúc dự án
 
-Tài liệu này mô tả cấu trúc đang thực sự được sử dụng. Nhiều file rỗng trong
-`src/` là khung dành cho phát triển sau này; chúng chưa tham gia vào luồng chạy.
+Tài liệu này mô tả cấu trúc đang thực sự được sử dụng. Các file backup không
+được tham chiếu đã được loại bỏ; các file khung cũ vẫn được giữ lại.
 
 ## Luồng chạy chính
 
@@ -18,9 +18,6 @@ Tài liệu này mô tả cấu trúc đang thực sự được sử dụng. Nh
 - `requirements.txt`: thư viện cần cài. Pygame chạy game; Matplotlib tạo biểu đồ.
 - `README.md`: hướng dẫn cài đặt, chạy, test và tổng quan kiến trúc.
 - `stats.csv`: dữ liệu sinh trong lúc chơi, không phải mã nguồn.
-- `out.log`: log chạy cục bộ; có thể xóa và không nên commit.
-- `information`: file rỗng, hiện không có chức năng.
-- `scratch_fix.py`: script sửa tạm, không thuộc luồng chạy chính.
 
 ## `src/` — mã nguồn
 
@@ -39,15 +36,18 @@ Tài liệu này mô tả cấu trúc đang thực sự được sử dụng. Nh
 
 - `game_pathfinder.py`: API tìm đường game đang dùng; triển khai các thuật toán và luật di chuyển liên quan vòng xuyến.
 - `local_search/store_selector.py`: chấm điểm/chọn cửa hàng khi sinh đơn.
-- `pathfinding/`, `reinforcement/`, `ai_controller.py`: khung phát triển, hiện rỗng.
+- `pathfinding/`, `reinforcement/`, `ai_controller.py`: các module khung cũ; hiện
+  chưa tham gia luồng chạy chính.
 
 ### `src/gameplay/`
 
 - `delivery_task.py`: mô hình dữ liệu của một nhiệm vụ giao hàng.
 - `order_generator.py`: sinh đơn và phối hợp `StoreSelector`.
 - `roundabout_geometry.py`: dựng/nội suy đường cong để xe chạy mượt qua vòng xuyến.
-- `player_controller.py`: input, tự động tìm đường và cập nhật player.
-- `npc_controller.py`: cập nhật đường đi, nhiệm vụ và chuyển động NPC.
+- `play/controller.py`: mode chơi thủ công; nhận input, di chuyển player, cập nhật
+  cuộc đua và kiểm tra điều kiện thắng.
+- `auto/controller.py`: mode tự động; điều khiển player tự động, NPC AI, path hint
+  và cập nhật simulation.
 - `movement_service.py`: thao tác di chuyển dùng chung cho các shipper.
 - `delivery_manager.py`: tạo và kiểm tra khả năng tiếp cận nhiệm vụ.
 - `game_flow.py`: reset ván chơi, thắng/thua và ghi thống kê.
@@ -62,7 +62,7 @@ Tài liệu này mô tả cấu trúc đang thực sự được sử dụng. Nh
 ### `src/entities/`
 
 - `directional_shipper.py`: sprite theo hướng, animation và chuyển động trên đường.
-- Các file entity khác đang rỗng; logic tương ứng hiện nằm trong `GameManager`.
+- Các file entity rỗng khác là placeholder được giữ lại để phát triển sau.
 
 ### `src/systems/`
 
@@ -71,15 +71,15 @@ Tài liệu này mô tả cấu trúc đang thực sự được sử dụng. Nh
 - `sprite_loader.py`: tải, scale và cache sprite Pygame.
 - `stats_logger.py`: ghi một ván chơi thành một dòng CSV.
 - `stats_analyzer.py`: tổng hợp CSV và tạo báo cáo/biểu đồ.
-- `animation.py`, `camera.py`, `sound_manager.py`: file đặt chỗ cho phát triển sau.
+- `animation.py`, `camera.py`, `sound_manager.py`: placeholder được giữ lại.
 
 ### Các thư mục còn lại trong `src/`
 
-- `algorithms/`: khung thuật toán cũ; game hiện gọi `src/ai/game_pathfinder.py`.
 - `ui/`: các mixin trình bày đã được tách thành menu, button, popup, gameplay
   renderer, HUD, pause, result, text và viewport letterbox.
-- `utils/`: khung tiện ích, hiện rỗng.
-- `scripts/`: khung cũ; công cụ thật nằm ở `scripts/` cấp dự án.
+- `utils/`: các placeholder tiện ích cũ.
+- Bộ `src/algorithms/` cũ đã được xóa để tránh trùng với hướng phát triển
+  `src/ai/pathfinding/`. Công cụ CLI chỉ đặt trong `scripts/` cấp dự án.
 
 ## Dữ liệu và công cụ
 
@@ -99,5 +99,5 @@ Tài liệu này mô tả cấu trúc đang thực sự được sử dụng. Nh
 - Mã chạy thật đặt trong `src/`; CLI trong `scripts/`; test trong `tests/`.
 - Tài nguyên runtime đặt trong `assets/`; nguồn Tiled đặt trong `maps/`.
 - Không commit cache, log, thống kê runtime, session Tiled hay file backup.
-- Khi triển khai module rỗng, chuyển logic tương ứng khỏi `GameManager` và thêm
-  test trước khi xóa code cũ.
+- Người phát triển Play chỉ sửa `gameplay/play/`; người phát triển Auto chỉ sửa
+  `gameplay/auto/`. Thay đổi phần dùng chung cần được thống nhất trước.

@@ -1,6 +1,8 @@
+from src.entities.directional_shipper import DirectionalShipper
 from pathlib import Path
 from typing import List, Optional, Tuple
 
+# pyrefly: ignore [missing-import]
 import pygame
 
 from .command_handler import CommandHandlerMixin
@@ -15,9 +17,9 @@ from src.gameplay.delivery_task import DeliveryTask
 from src.gameplay.game_flow import GameFlowMixin
 from src.gameplay.gameplay_controller import GameplayControllerMixin
 from src.gameplay.movement_service import MovementServiceMixin
-from src.gameplay.npc_controller import NpcControllerMixin
 from src.gameplay.order_generator import OrderGenerator
-from src.gameplay.player_controller import PlayerControllerMixin
+from src.gameplay.auto.controller import AutoModeMixin
+from src.gameplay.play.controller import PlayModeMixin
 from src.maps.map_manager import MapManagerMixin
 from src.maps.matrix_loader import MatrixLoader
 from src.maps.tmx_loader import TmxMapLoader
@@ -47,8 +49,8 @@ class GameManager(
     TextRendererMixin,
     CommandHandlerMixin,
     StateUpdaterMixin,
-    PlayerControllerMixin,
-    NpcControllerMixin,
+    PlayModeMixin,
+    AutoModeMixin,
     MovementServiceMixin,
     DeliveryManagerMixin,
     GameFlowMixin,

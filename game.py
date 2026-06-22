@@ -20,8 +20,6 @@ def parse_args():
 
 
 def main() -> int:
-    # Windows may default to cp1258, which cannot encode every Vietnamese
-    # character used by the error messages below.
     for stream in (sys.stdout, sys.stderr):
         reconfigure = getattr(stream, "reconfigure", None)
         if reconfigure is not None:
