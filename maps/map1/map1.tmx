@@ -7,7 +7,7 @@
  <imagelayer id="2" name="Background" visible="0">
   <image source="../../assets/images/map/map1.png" width="1535" height="1024"/>
  </imagelayer>
- <layer id="3" name="Road_AI" width="48" height="32" visible="0">
+ <layer id="3" name="Road_AI" width="48" height="32">
   <data encoding="csv">
 0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,
 1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,1,1,1,1,1,1,1,1,1,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,1,1,1,1,1,1,

@@ -1,5 +1,14 @@
 import argparse
+from pathlib import Path
+import sys
 import traceback
+
+
+PROJECT_ROOT = Path(__file__).resolve().parent
+LOCAL_VENDOR_DIR = PROJECT_ROOT / ".vendor"
+
+if LOCAL_VENDOR_DIR.is_dir():
+    sys.path.insert(0, str(LOCAL_VENDOR_DIR))
 
 
 def parse_args():
@@ -10,7 +19,14 @@ def parse_args():
     return parser.parse_args()
 
 
-def main():
+def main() -> int:
+    # Windows may default to cp1258, which cannot encode every Vietnamese
+    # character used by the error messages below.
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            reconfigure(encoding="utf-8", errors="replace")
+
     args = parse_args()
 
     try:
@@ -29,6 +45,7 @@ def main():
 
         game = GameManager(settings=settings, debug=args.debug)
         game.run()
+        return 0
 
     except Exception as exc:
         print()
@@ -44,6 +61,8 @@ def main():
             print("Gợi ý: chạy lại bằng lệnh sau để xem lỗi chi tiết:")
             print("python game.py --debug")
 
+        return 1
+
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

@@ -16,7 +16,9 @@ def main():
         print("Hãy chơi game đến khi thắng/thua ít nhất 1 lần để tạo dữ liệu.")
         return
 
-    summary_path = analyzer.save_summary_csv(PROJECT_ROOT / "assets" / "images" / "algorithm_summary.csv")
+    summary_path = analyzer.save_summary_csv(
+        PROJECT_ROOT / "assets" / "images" / "algorithm_summary.csv"
+    )
     print(f"[OK] Saved summary: {summary_path}")
 
     try:

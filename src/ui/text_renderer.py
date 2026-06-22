@@ -29,11 +29,14 @@ from src.systems.asset_paths import get_ui_asset_path
 from src.entities.directional_shipper import DirectionalShipper
 
 
-class PauseMenuMixin:
-    def _draw_pause(self) -> None:
-        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, 150))
-        self.screen.blit(overlay, (0, 0))
+class TextRendererMixin:
+    def _draw_text(self, text: str, font: pygame.font.Font, color: Tuple[int, int, int], x: int, y: int, center: bool = False) -> None:
+        surface = font.render(str(text), True, color)
+        rect = surface.get_rect()
 
-        self._draw_text("PAUSED", self.font_big, (255, 255, 255), SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 40, center=True)
-        self._draw_text("ESC or ENTER to continue", self.font_mid, (255, 255, 255), SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 20, center=True)
+        if center:
+            rect.center = (x, y)
+        else:
+            rect.topleft = (x, y)
+
+        self.screen.blit(surface, rect)
