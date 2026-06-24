@@ -1,32 +1,19 @@
 from __future__ import annotations
 
-import random
-from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List, Tuple
 
+# pyrefly: ignore [missing-import]
 import pygame
 
 from src.core.constants import (
     BACKGROUND_COLOR,
     GRID_LINE_COLOR,
-    TEXT_COLOR,
-    PLAYER_COLOR,
-    NPC_COLORS,
     SCREEN_WIDTH,
     SCREEN_HEIGHT,
-    TILE_SIZE,
-    GRID_COLS,
-    GRID_ROWS,
-    GAME_TITLE,
 )
 from src.core.game_state import GameState
-from src.ai.game_pathfinder import GamePathfinder
-from src.gameplay.delivery_task import DeliveryTask
-from src.gameplay.order_generator import OrderGenerator
 from src.gameplay.roundabout_geometry import build_roundabout_curve, curve_point
-from src.systems.stats_logger import StatsLogger, GameStatsRecord
-from src.systems.asset_paths import get_ui_asset_path
-from src.entities.directional_shipper import DirectionalShipper
+from src.maps.matrix_loader import MatrixLoader
 
 
 class GameRendererMixin:
@@ -167,13 +154,22 @@ class GameRendererMixin:
 
     def _draw_active_locations(self) -> None:
         import math
+        # pyrefly: ignore [missing-import]
         import pygame
 
         time_ticks = pygame.time.get_ticks()
         bounce_offset = abs(math.sin(time_ticks * 0.005)) * 10  # Jump height up to 10 pixels
 
+        if not self.simulation_mode:
+            self._draw_player_offer_markers(bounce_offset)
+
         # Draw for Player
-        if not self.simulation_mode and getattr(self, 'player_task', None) and not self.player_task.delivered:
+        if (
+            not self.simulation_mode
+            and getattr(self, 'player_task', None)
+            and self.player_task.picked_up
+            and not self.player_task.delivered
+        ):
             self._draw_bouncing_location("location_player", self.player_task.target_pos, bounce_offset)
 
         # Draw for NPCs
@@ -186,6 +182,35 @@ class GameRendererMixin:
                         icon_name = "location_npc1" # Fallback
                     self._draw_bouncing_location(icon_name, task.target_pos, bounce_offset)
 
+    def _draw_player_offer_markers(self, bounce_offset: float) -> None:
+        offers = list(getattr(self, "available_player_tasks", []))
+        selected_index = getattr(self, "selected_player_order_index", -1)
+        cell_w, cell_h = self._cell_size_screen()
+        self._offer_marker_rects = []
+
+        for index, task in enumerate(offers[:5]):
+            x, y = self._grid_to_screen(task.store_pos)
+            center = (x + cell_w // 2, y + cell_h // 2 - int(bounce_offset * 0.45))
+            selected = index == selected_index
+            icon = self.icons.get("location_shop")
+            if icon:
+                scale = 1.6; icon_w = max(1, int(icon.get_width() * scale)); icon_h = max(1, int(icon.get_height() * scale))
+                icon = pygame.transform.smoothscale(icon, (icon_w, icon_h))
+                draw_x = center[0] - icon_w // 2
+                draw_y = center[1] - icon_h + cell_h // 3
+                self.screen.blit(icon, (draw_x, draw_y))
+            else:
+                self._draw_target_marker(task.store_pos)
+            self._offer_marker_rects.append(pygame.Rect(center[0] - 22, center[1] - 22, 44, 44))
+
+            if selected:
+                target_x, target_y = self._grid_to_screen(task.house_pos)
+                target_center = (target_x + cell_w // 2, target_y + cell_h // 2)
+                house_number = self._house_number(task.house_pos)
+                label = str(house_number) if house_number else "H"
+                self._draw_text(label, self.font_tiny, (9, 27, 50), target_center[0] + 1, target_center[1] - 6, center=True)
+                self._draw_text(label, self.font_tiny, (255, 255, 255), target_center[0], target_center[1] - 7, center=True)
+
     def _draw_bouncing_location(self, icon_name: str, grid_pos: Tuple[int, int], bounce_offset: float) -> None:
         icon = self.icons.get(icon_name)
         if not icon:
@@ -193,10 +218,9 @@ class GameRendererMixin:
 
         x, y = self._grid_to_screen(grid_pos)
 
-        # Center horizontally, and offset vertically by the bounce amount
-        # We also offset a bit up so the pin's bottom points to the center of the cell
         cell_w, cell_h = self._cell_size_screen()
-        icon_w, icon_h = icon.get_size()
+        scale = 1.6; icon_w = max(1, int(icon.get_width() * scale)); icon_h = max(1, int(icon.get_height() * scale))
+        icon = pygame.transform.smoothscale(icon, (icon_w, icon_h))
 
         draw_x = x + (cell_w - icon_w) // 2
         draw_y = y + (cell_h - icon_h) // 2 - int(bounce_offset) - (icon_h // 4)
@@ -214,10 +238,13 @@ class GameRendererMixin:
         else:
             x, y = self._grid_to_screen(shipper.grid_pos)
 
-        if sprite.get_width() != cell_w or sprite.get_height() != cell_h:
-            sprite = pygame.transform.smoothscale(sprite, (cell_w, cell_h))
+        scale = 1.35; draw_w = max(1, int(cell_w * scale)); draw_h = max(1, int(cell_h * scale))
+        if sprite.get_width() != draw_w or sprite.get_height() != draw_h:
+            sprite = pygame.transform.smoothscale(sprite, (draw_w, draw_h))
 
-        self.screen.blit(sprite, (x, y))
+        draw_x = x + (cell_w - draw_w) // 2
+        draw_y = y + cell_h - draw_h
+        self.screen.blit(sprite, (draw_x, draw_y))
 
     def _draw_matrix_overlay(self) -> None:
         cell_w, cell_h = self._cell_size_screen()

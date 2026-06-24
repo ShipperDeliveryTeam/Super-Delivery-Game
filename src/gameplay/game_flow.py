@@ -73,13 +73,23 @@ class GameFlowMixin:
         self.auto_player_enabled = False
         self.move_dir = (0, 0)
         self._player_last_trap_penalty_pos = None
+        self.delivery_confirmation_open = False
+        self.delivery_checkbox_checked = False
+        self._delivery_prompt_dismissed_pos = None
+        self.delivered_house_numbers = []
+        self._next_player_order_id = 0
+        self.order_scroll_offset = 0
 
         self._create_shipper_objects()
 
-        self.player_task = None if self.simulation_mode else self._new_task("Player")
+        self.player_task = None
+        self.player_tasks = []
+        self.available_player_tasks = []
         self.npc_tasks = {}
         self.npc_paths = {}
         self.npc_expanded = {}
+        self.npc_wait_until = {}
+        self.npc_wait_action = {}
 
         if self.player:
             self.player.money = 0
@@ -94,4 +104,4 @@ class GameFlowMixin:
             self.player_path_hint = []
             self.player_path_expanded = 0
         else:
-            self._refresh_player_path_hint()
+            self._generate_player_order_offers()

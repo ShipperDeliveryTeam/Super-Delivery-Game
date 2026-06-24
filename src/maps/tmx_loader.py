@@ -44,7 +44,7 @@ class TmxMapData:
 
     store_rewards: dict[GridPos, int] = field(default_factory=dict)
     store_names: dict[GridPos, str] = field(default_factory=dict)
-
+    store_ids: dict[GridPos, str] = field(default_factory=dict)
 
 class TmxMapLoader:
     """
@@ -306,6 +306,7 @@ class TmxMapLoader:
                     data.store_positions.append(road_pos)
                     data.store_rewards[road_pos] = int(props.get("base_reward", props.get("reward", 50)))
                     data.store_names[road_pos] = str(props.get("shop_name", name or "Store"))
+                    data.store_ids[road_pos] = obj.attrib.get("id", "0")
 
                 elif "delivery" in lower or "house" in lower or "customer" in lower:
                     road_pos = self._nearest_walkable(raw_pos, data.grid)

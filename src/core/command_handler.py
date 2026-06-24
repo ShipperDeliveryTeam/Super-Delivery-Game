@@ -105,3 +105,7 @@ class CommandHandlerMixin:
 
         elif ctype == CommandType.DEBUG_LOSE:
             self._finish_game("NPC DEBUG")
+
+        elif ctype == CommandType.SCROLL:
+            if hasattr(self, '_handle_scroll_event'):
+                self._handle_scroll_event(command)

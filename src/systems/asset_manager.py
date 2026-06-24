@@ -4,6 +4,7 @@ import random
 from pathlib import Path
 from typing import List, Optional, Tuple
 
+# pyrefly: ignore [missing-import]
 import pygame
 
 from src.core.constants import (
@@ -33,6 +34,7 @@ from src.systems.asset_paths import (
     get_npc_sprite_paths,
     get_icon_path,
     get_ui_asset_path,
+    IMAGES_DIR,
     MAPS_DIR,
 )
 from src.systems.sprite_loader import SpriteLoader
@@ -60,7 +62,13 @@ class AssetManagerMixin:
 
     def _load_assets(self) -> None:
         self.ui_background = self._load_ui_image("phongnen.png", (SCREEN_WIDTH, SCREEN_HEIGHT))
-        self.ui_logo = self._load_ui_image("logo.png", (860, 300))
+        self.ui_logo = self._load_ui_image("logo.png")
+        self.ui_information_card = self._load_ui_image("information_card.png")
+        self.ui_delivery_active_card = self._load_ui_image("delivery_active_card.png")
+        self.ui_delivery_confirm_popup = self._load_ui_image("delivery_confirm_popup.png")
+        self.ui_order_card = self._load_ui_image("order_card.png")
+        self.ui_shop_order_card = self._load_ui_image("shop_order_card.png")
+        self.shop_card_images = self._load_shop_card_images()
         right_path = get_player_sprite_paths().get("right")
         self.ui_shipper = None
         if right_path and right_path.exists():
@@ -115,12 +123,58 @@ class AssetManagerMixin:
             fallback_text="$",
         )
 
+        self.icons["box"] = self.sprite_loader.load_image(
+            get_icon_path("box"),
+            size=(TILE_SIZE, TILE_SIZE),
+            fallback_color=(200, 150, 80),
+            fallback_text="B",
+        )
+
+        self.icons["clock"] = self.sprite_loader.load_image(
+            get_icon_path("clock"),
+            size=(TILE_SIZE, TILE_SIZE),
+            fallback_color=(100, 200, 255),
+            fallback_text="T",
+        )
+
+        self.icons["star"] = self.sprite_loader.load_image(
+            get_icon_path("star"),
+            size=(TILE_SIZE, TILE_SIZE),
+            fallback_color=(255, 215, 0),
+            fallback_text="*",
+        )
+
+        self.icons["receive"] = self.sprite_loader.load_image(
+            get_icon_path("receive"),
+            size=(96, 40),
+            fallback_color=(47, 163, 67),
+            fallback_text="NHAN",
+        )
+        self.icons["received"] = self.sprite_loader.load_image(
+            get_icon_path("received"),
+            size=(96, 40),
+            fallback_color=(94, 103, 108),
+            fallback_text="DA NHAN",
+        )
+        self.icons["rob"] = self.sprite_loader.load_image(
+            get_icon_path("rob"),
+            size=(96, 40),
+            fallback_color=(170, 55, 45),
+            fallback_text="ROB",
+        )
+
         # Load location icons
         self.icons["location_player"] = self.sprite_loader.load_image(
             get_icon_path("location_shipper"),
             size=(TILE_SIZE, TILE_SIZE),
             fallback_color=(55, 120, 220),
             fallback_text="LOC",
+        )
+        self.icons["location_shop"] = self.sprite_loader.load_image(
+            get_icon_path("location_shop"),
+            size=(TILE_SIZE, TILE_SIZE),
+            fallback_color=(255, 177, 47),
+            fallback_text="SHOP",
         )
         self.icons["location_npc1"] = self.sprite_loader.load_image(
             get_icon_path("location_npc1"),
@@ -177,3 +231,29 @@ class AssetManagerMixin:
                 fallback_color=(55, 120, 220),
                 fallback_text="SIM",
             )
+
+    def _load_shop_card_images(self) -> dict[int, dict[str, pygame.Surface]]:
+        output: dict[int, dict[str, pygame.Surface]] = {}
+
+        try:
+            folders = [
+                (1, IMAGES_DIR / "shop_map1"),
+                (2, IMAGES_DIR / "shop_map2"),
+                (3, IMAGES_DIR / "shop_map3"),
+            ]
+
+            for map_id, folder in folders:
+                if not folder.exists():
+                    continue
+
+                map_images: dict[str, pygame.Surface] = {}
+                for path in folder.glob("*.png"):
+                    key = path.stem.replace("_store", "").replace("_shop", "").replace("_", "").lower()
+                    map_images[key] = pygame.image.load(str(path)).convert_alpha()
+
+                output[map_id] = map_images
+
+        except Exception as exc:
+            print(f"[WARN] Khong load duoc shop card images: {exc}")
+
+        return output

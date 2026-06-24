@@ -12,6 +12,12 @@ class DeliveryTask:
     holder_name: Optional[str] = None
     picked_up: bool = False
     delivered: bool = False
+    order_id: str = ""
+    created_at: float = 0.0
+    expires_in: float = 180.0
+    stolen_by: Optional[str] = None
+    pickup_started_at: Optional[float] = None
+    delivery_started_at: Optional[float] = None
 
     @property
     def target_pos(self) -> GridPos:
@@ -28,6 +34,9 @@ class DeliveryTask:
 
     def try_pickup(self, shipper_name: str, pos: GridPos) -> bool:
         if self.delivered:
+            return False
+
+        if self.stolen_by and self.stolen_by != shipper_name:
             return False
 
         if self.holder_name != shipper_name:

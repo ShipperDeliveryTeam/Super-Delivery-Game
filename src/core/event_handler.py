@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import List, Optional, Tuple
 
+# pyrefly: ignore [missing-import]
 import pygame
 
 
@@ -19,6 +20,7 @@ class CommandType(Enum):
     MOVE_RIGHT = "move_right"
     STOP_MOVE = "stop_move"
     MOUSE_CLICK = "mouse_click"
+    SCROLL = "scroll"
 
     SELECT_MAP = "select_map"
     SELECT_ALGORITHM = "select_algorithm"
@@ -59,6 +61,8 @@ class EventHandler:
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1:
                     commands.append(GameCommand(CommandType.MOUSE_CLICK, event.pos))
+                elif event.button in (4, 5):
+                    commands.append(GameCommand(CommandType.SCROLL, 1 if event.button == 4 else -1))
 
             elif event.type == pygame.MOUSEMOTION:
                 self.last_mouse_pos = event.pos

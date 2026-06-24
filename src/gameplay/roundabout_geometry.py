@@ -57,6 +57,22 @@ def build_roundabout_curve(
     if ring_pos_index is None:
         return None
 
+    # Cardinal gates must stay centered in their lane until they reach the
+    # ring. Applying the ring tangent inside a one-cell gate makes horizontal
+    # gates dip vertically and vertical gates sway sideways.
+    if start[1] == end[1] or start[0] == end[0]:
+        dx = end[0] - start[0]
+        dy = end[1] - start[1]
+        p0 = (float(start[0]), float(start[1]))
+        p3 = (float(end[0]), float(end[1]))
+        return {
+            "kind": "bezier",
+            "p0": p0,
+            "p1": (p0[0] + dx / 3.0, p0[1] + dy / 3.0),
+            "p2": (p0[0] + 2.0 * dx / 3.0, p0[1] + 2.0 * dy / 3.0),
+            "p3": p3,
+        }
+
     # The ring tuple is clockwise on screen. Traffic uses the previous node,
     # which gives the natural counter-clockwise roundabout direction.
     successor = ring[(ring_pos_index - 1) % len(ring)]

@@ -15,13 +15,17 @@ class PlayModeMixin:
         self.state = GameState.PLAYING
 
     def _update_play_mode(self, dt: float) -> None:
-        if not self.auto_player_enabled:
+        if getattr(self, "delivery_confirmation_open", False):
+            self.move_dir = (0, 0)
+        elif not self.auto_player_enabled:
             self._poll_keyboard_movement()
 
         self.move_timer += dt
         if self.move_timer >= 0.065:
             self.move_timer = 0.0
-            if self.auto_player_enabled:
+            if getattr(self, "delivery_confirmation_open", False):
+                pass
+            elif self.auto_player_enabled:
                 self._move_player_auto()
             else:
                 self._move_player(allow_queue=True)
@@ -40,13 +44,15 @@ class PlayModeMixin:
             self._finish_game("Player")
             return
 
-        for npc in self.npc_shippers:
-            if npc.money >= self.settings.target_revenue:
-                self._finish_game(npc.name)
-                return
+        if getattr(self, "elapsed_time", 0.0) >= 300.0:
+            self._finish_game("Time Up")
+            return
 
     def _request_player_step(self, dx: int, dy: int) -> None:
         if self.state != GameState.PLAYING or self.auto_player_enabled:
+            return
+
+        if getattr(self, "delivery_confirmation_open", False):
             return
 
         if self._allow_diagonal_movement():
@@ -83,22 +89,30 @@ class PlayModeMixin:
         if not self.player:
             return
 
-        if self.player_task is None or self.player_task.delivered:
-            self.player_task = self._new_task("Player")
+        current_pos = self.player.grid_pos
+        player_tasks = list(getattr(self, "player_tasks", []))
 
-        self.player_task.assign_to("Player")
+        for task in player_tasks:
+            if getattr(task, "stolen_by", None):
+                self._drop_player_task(task)
+                self._replenish_player_order_offers()
+                continue
 
-        picked = self.player_task.try_pickup("Player", self.player.grid_pos)
-        delivered = self.player_task.try_deliver("Player", self.player.grid_pos)
+            task.assign_to("Player")
 
-        if picked:
-            self._refresh_player_path_hint()
+            if not task.picked_up and current_pos == task.store_pos:
+                picked = task.try_pickup("Player", current_pos)
+                if picked:
+                    self.player_task = task
+                    self._refresh_player_path_hint()
+                break
 
-        if delivered:
-            self.player.money += self.player_task.reward
-            self.player.orders += 1
-            self.player_task = self._new_task("Player")
-            self._refresh_player_path_hint()
+            if task.picked_up and current_pos == task.house_pos:
+                self.player_task = task
+                break
+
+        if self._delivery_prompt_dismissed_pos != self.player.grid_pos:
+            self._delivery_prompt_dismissed_pos = None
 
         if self.player.grid_pos in self.trap_positions:
             if self._player_last_trap_penalty_pos == self.player.grid_pos:

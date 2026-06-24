@@ -32,7 +32,7 @@ class GameSettings:
     selected_algorithm: str = DEFAULT_ALGORITHM
 
     sound_enabled: bool = True
-    show_grid: bool = True
+    show_grid: bool = False
     show_path_hint: bool = True
     debug: bool = False
     target_revenue: int = TARGET_REVENUE

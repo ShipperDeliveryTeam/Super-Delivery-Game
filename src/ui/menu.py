@@ -4,6 +4,7 @@ import random
 from pathlib import Path
 from typing import List, Optional, Tuple
 
+# pyrefly: ignore [missing-import]
 import pygame
 
 from src.core.constants import (
@@ -229,6 +230,10 @@ class MenuMixin:
         self._draw_text_button(self.exit_button_rect, "3. Exit Game", (180, 70, 70))
 
     def _handle_mouse_click(self, pos: tuple[int, int]) -> None:
+        if self.state == GameState.PLAYING:
+            self._handle_gameplay_mouse_click(pos)
+            return
+
         if self.state != GameState.MENU:
             return
 

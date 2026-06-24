@@ -1,4 +1,5 @@
 import argparse
+import importlib.util
 from pathlib import Path
 import sys
 import traceback
@@ -7,7 +8,10 @@ import traceback
 PROJECT_ROOT = Path(__file__).resolve().parent
 LOCAL_VENDOR_DIR = PROJECT_ROOT / ".vendor"
 
-if LOCAL_VENDOR_DIR.is_dir():
+# Prefer dependencies installed in the active interpreter/virtual environment.
+# The project-local vendor directory is only a fallback; forcing it to the
+# front can turn an unreadable pygame folder into an empty namespace package.
+if importlib.util.find_spec("pygame") is None and LOCAL_VENDOR_DIR.is_dir():
     sys.path.insert(0, str(LOCAL_VENDOR_DIR))
 
 

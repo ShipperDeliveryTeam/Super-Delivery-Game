@@ -67,7 +67,7 @@ class MapManagerMixin:
         return self.settings.selected_map_id == 2
 
     def _roundabout_center(self) -> tuple[float, float] | None:
-        return (23.5, 16.5) if self.settings.selected_map_id == 2 else None
+        return (23.5, 16.0) if self.settings.selected_map_id == 2 else None
 
     def _roundabout_ring(self) -> tuple[Tuple[int, int], ...]:
         if self.settings.selected_map_id != 2:
@@ -78,11 +78,10 @@ class MapManagerMixin:
             (23, 14),
             (24, 14),
             (25, 15),
-            (26, 16),
-            (26, 17),
-            (25, 18),
-            (24, 19),
-            (23, 19),
+            (25, 16),
+            (25, 17),
+            (24, 18),
+            (23, 18),
             (22, 18),
             (21, 17),
             (21, 16),
@@ -94,12 +93,14 @@ class MapManagerMixin:
             return ()
 
         return (
-            ((23, 13), (23, 14)),
-            ((23, 19), (23, 20)),
-            ((20, 15), (21, 16)),
-            ((20, 18), (21, 17)),
-            ((26, 16), (27, 15)),
-            ((26, 17), (27, 18)),
+            ((23, 13), (23, 14)),  # Cổng phía trên
+            ((23, 18), (23, 19)),  # Cổng phía dưới
+
+            ((20, 16), (21, 16)),  # Nhánh chéo tây-bắc
+            ((20, 18), (21, 17)),  # Nhánh chéo tây-nam
+
+            ((25, 16), (26, 16)),  # Cổng đông-bắc; (26,16) thuộc đường chéo ngoài vòng
+            ((25, 17), (26, 18)),  # Nhánh chéo đông-nam
         )
 
     def _load_map_for_selected_map(self) -> None:
@@ -124,6 +125,9 @@ class MapManagerMixin:
                     self._load_png_map_background()
 
                 self.store_positions = data.store_positions
+                self.store_names = dict(data.store_names)
+                self.store_rewards = dict(data.store_rewards)
+                self.store_ids = dict(data.store_ids)
                 self.house_positions = data.house_positions
                 self.trap_positions = set(data.trap_positions)
                 self.player_spawn = data.player_spawn or (3, 3)
@@ -159,6 +163,8 @@ class MapManagerMixin:
         self.map_rows = GRID_ROWS
         self.blocked_positions = self.matrix_loader.blocked_positions(self.grid_matrix)
         self.store_positions = self.matrix_loader.extract_positions(self.grid_matrix, MatrixLoader.STORE)
+        self.store_names = {}
+        self.store_rewards = {}
         self.house_positions = self.matrix_loader.extract_positions(self.grid_matrix, MatrixLoader.HOUSE)
         self.trap_positions = set(self.matrix_loader.extract_positions(self.grid_matrix, MatrixLoader.TRAP))
         self.player_spawn = (3, 3)

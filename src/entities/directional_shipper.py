@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 from typing import Any
 
+# pyrefly: ignore [missing-import]
 import pygame
 
 from src.gameplay.roundabout_geometry import build_roundabout_curve, curve_length, curve_point, edge_key

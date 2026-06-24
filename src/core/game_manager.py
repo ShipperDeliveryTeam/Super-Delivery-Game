@@ -76,7 +76,9 @@ class GameManager(
         self.font_big = pygame.font.SysFont("arial", 42, bold=True)
         self.font_mid = pygame.font.SysFont("arial", 24, bold=True)
         self.font_small = pygame.font.SysFont("arial", 18)
+        self.font_small_bold = pygame.font.SysFont("arial", 18, bold=True)
         self.font_tiny = pygame.font.SysFont("arial", 15)
+        self.font_tiny_bold = pygame.font.SysFont("arial", 15, bold=True)
 
         self.sprite_loader = SpriteLoader(TILE_SIZE)
         self.matrix_loader = MatrixLoader(GRID_COLS, GRID_ROWS)
