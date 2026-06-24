@@ -183,7 +183,10 @@ class GameRendererMixin:
                     self._draw_bouncing_location(icon_name, task.target_pos, bounce_offset)
 
     def _draw_player_offer_markers(self, bounce_offset: float) -> None:
-        offers = list(getattr(self, "available_player_tasks", []))
+        offers = [
+            task for task in getattr(self, "available_player_tasks", [])
+            if not getattr(task, "picked_up", False)
+        ]
         selected_index = getattr(self, "selected_player_order_index", -1)
         cell_w, cell_h = self._cell_size_screen()
         self._offer_marker_rects = []

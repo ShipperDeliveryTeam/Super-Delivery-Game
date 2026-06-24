@@ -52,6 +52,15 @@ class GameSmokeTests(unittest.TestCase):
         manager.player.set_grid_pos(task.store_pos)
         manager._handle_player_task_at_current_pos()
         self.assertTrue(task.picked_up)
+        self.assertIn(task, manager.available_player_tasks)
+        manager._draw_player_offer_markers(0)
+        marker_stores = [
+            offer.store_pos
+            for offer in manager.available_player_tasks
+            if not getattr(offer, "picked_up", False)
+        ]
+        self.assertEqual(len(manager._offer_marker_rects), len(marker_stores))
+        self.assertNotIn(task.store_pos, marker_stores)
 
         manager.player.set_grid_pos(task.house_pos)
         manager._handle_player_task_at_current_pos()
@@ -112,6 +121,35 @@ class GameSmokeTests(unittest.TestCase):
         self.assertEqual(settings.selected_map_id, 1)
         self.assertEqual(manager.state, GameState.WIN)
         self.assertEqual(manager.winner_name, "Player")
+
+    def test_player_order_offers_use_unique_random_shops(self):
+        manager = GameManager(GameSettings(), debug=True)
+        manager._start_play_mode()
+
+        stores = [task.store_pos for task in manager.available_player_tasks]
+        self.assertEqual(len(stores), 5)
+        self.assertEqual(len(set(stores)), len(stores))
+
+        manager._replenish_player_order_offers()
+        stores = [task.store_pos for task in manager.available_player_tasks]
+        self.assertEqual(len(set(stores)), len(stores))
+
+    def test_npc_picks_up_immediately_then_waits_and_removes_shop_offer(self):
+        manager = GameManager(GameSettings(), debug=True)
+        manager._start_play_mode()
+        npc = manager.npc_shippers[0]
+        task = manager.available_player_tasks[0]
+        npc.set_grid_pos(task.store_pos)
+        manager.npc_tasks[npc.name] = task
+        manager.npc_paths[npc.name] = []
+
+        manager._update_npcs()
+
+        self.assertTrue(task.picked_up)
+        self.assertEqual(task.stolen_by, npc.name)
+        self.assertNotIn(task, manager.available_player_tasks)
+        self.assertGreater(manager.npc_wait_until.get(npc.name, 0), manager.elapsed_time)
+        self.assertEqual(manager.npc_wait_action.get(npc.name), "pickup")
 
 
 if __name__ == "__main__":

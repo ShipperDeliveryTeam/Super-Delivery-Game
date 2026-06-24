@@ -111,6 +111,9 @@ class AutoModeMixin:
             if wait_until > getattr(self, "elapsed_time", 0.0):
                 continue
             wait_action = getattr(self, "npc_wait_action", {}).get(npc.name)
+            if wait_action == "pickup":
+                self._clear_npc_wait(npc.name)
+                wait_action = None
 
             if npc.name not in self.npc_tasks or self.npc_tasks[npc.name].delivered or getattr(self.npc_tasks[npc.name], "stolen_by", None) not in (None, npc.name):
                 task = self._choose_npc_disruption_task(npc)
@@ -153,11 +156,6 @@ class AutoModeMixin:
                     self.npc_paths[npc.name] = []
 
             if not task.picked_up and npc.grid_pos == task.store_pos:
-                if wait_action != "pickup":
-                    self._start_npc_wait(npc.name, "pickup", 10.0)
-                    continue
-
-                self._clear_npc_wait(npc.name)
                 task.stolen_by = npc.name
                 task.holder_name = npc.name
                 task.picked_up = True
@@ -167,6 +165,7 @@ class AutoModeMixin:
                     if offer is not task
                 ]
                 self._replenish_player_order_offers()
+                self._start_npc_wait(npc.name, "pickup", 10.0)
                 self.npc_paths[npc.name] = []
                 continue
 

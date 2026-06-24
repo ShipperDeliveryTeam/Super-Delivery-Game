@@ -97,27 +97,46 @@ class DeliveryManagerMixin:
 
         return None
 
-    def _create_player_order_offer(self) -> DeliveryTask:
-        task = self._new_task(None)
+    def _create_player_order_offer(self, used_stores: set[Tuple[int, int]] | None = None) -> DeliveryTask:
+        used_stores = set(used_stores or set())
+        task = self._random_player_offer_for_unused_store(used_stores) or self._new_task(None)
         self._next_player_order_id = getattr(self, "_next_player_order_id", 0) + 1
         task.order_id = f"A{self._next_player_order_id:02d}"
         task.created_at = float(getattr(self, "elapsed_time", 0.0))
         task.expires_in = 150.0 + (self._next_player_order_id % 3) * 30.0
         return task
 
+    def _random_player_offer_for_unused_store(self, used_stores: set[Tuple[int, int]]) -> DeliveryTask | None:
+        stores = [store for store in getattr(self, "store_positions", []) if store not in used_stores]
+        houses = list(getattr(self, "house_positions", []))
+        random.shuffle(stores)
+
+        for store in stores:
+            random.shuffle(houses)
+            for house in houses:
+                result = self.pathfinder.find_path(store, house, "ASTAR")
+                if not result.success:
+                    continue
+
+                base_reward = int(getattr(self, "store_rewards", {}).get(store, 60))
+                distance_bonus = min(120, len(result.path) * 3)
+                reward = base_reward + distance_bonus + random.randint(0, 30)
+                return DeliveryTask(store_pos=store, house_pos=house, reward=reward)
+
+        return None
+
     def _generate_player_order_offers(self, count: int | None = None) -> None:
         target_count = int(count or self.PLAYER_OFFER_COUNT)
         offers: list[DeliveryTask] = []
-        used_routes: set[tuple[Tuple[int, int], Tuple[int, int]]] = set()
+        used_stores: set[Tuple[int, int]] = set()
 
         for _ in range(target_count * 20):
-            task = self._create_player_order_offer()
-            route = (task.store_pos, task.house_pos)
+            task = self._create_player_order_offer(used_stores)
 
-            if route in used_routes:
+            if task.store_pos in used_stores:
                 continue
 
-            used_routes.add(route)
+            used_stores.add(task.store_pos)
             offers.append(task)
 
             if len(offers) >= target_count:
@@ -129,19 +148,18 @@ class DeliveryManagerMixin:
 
     def _replenish_player_order_offers(self) -> None:
         offers = list(getattr(self, "available_player_tasks", []))
-        used_routes = {(task.store_pos, task.house_pos) for task in offers}
+        used_stores = {task.store_pos for task in offers}
 
         for _ in range(self.PLAYER_OFFER_COUNT * 20):
             if len(offers) >= self.PLAYER_OFFER_COUNT:
                 break
 
-            task = self._create_player_order_offer()
-            route = (task.store_pos, task.house_pos)
+            task = self._create_player_order_offer(used_stores)
 
-            if route in used_routes:
+            if task.store_pos in used_stores:
                 continue
 
-            used_routes.add(route)
+            used_stores.add(task.store_pos)
             offers.append(task)
 
         self.available_player_tasks = offers

@@ -118,7 +118,7 @@ class LeftOrderCardMixin:
         slot_size = min(42, rect.height - 14)
         slot_x = rect.x + (118 if draw_frame else 75)
         for index in range(cargo_limit):
-            slot = pygame.Rect(slot_x + index * (slot_size + 8), rect.y + 5, slot_size, slot_size)
+            slot = pygame.Rect(slot_x + index * (slot_size + 14), rect.y + 5, slot_size, slot_size)
             if draw_frame:
                 pygame.draw.rect(self.screen, (8, 22, 34), slot, border_radius=7)
                 pygame.draw.rect(self.screen, (104, 82, 42), slot, width=2, border_radius=7)
@@ -165,19 +165,19 @@ class LeftOrderCardMixin:
             font = getattr(self, "font_small_bold", getattr(self, "font_mid", None))
 
             reward_rect = pygame.Rect(
-                rect.x + int(rect.width * 0.65) - 18,
-                rect.y + int(rect.height * 0.15) - 8,
+                rect.x + int(rect.width * 0.65) - 13,
+                rect.y + int(rect.height * 0.15) - 5,
                 int(rect.width * 0.30),
                 int(rect.height * 0.25),
             )
             house_rect = pygame.Rect(
-                rect.x + int(rect.width * 0.65) - 12,
-                rect.y + int(rect.height * 0.45) - 28,
+                rect.x + int(rect.width * 0.65) - 10,
+                rect.y + int(rect.height * 0.45) + 5,
                 int(rect.width * 0.30),
                 int(rect.height * 0.25),
             )
             button = pygame.Rect(
-                rect.x + int(rect.width * 0.56),
+                rect.x + int(rect.width * 0.56) - 5,
                 rect.y + int(rect.height * 0.68),
                 int(rect.width * 0.41),
                 int(rect.height * 0.30),
