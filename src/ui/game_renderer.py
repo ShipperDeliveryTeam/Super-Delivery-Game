@@ -160,6 +160,11 @@ class GameRendererMixin:
         time_ticks = pygame.time.get_ticks()
         bounce_offset = abs(math.sin(time_ticks * 0.005)) * 10  # Jump height up to 10 pixels
 
+        if self.simulation_mode and getattr(self, "auto_visual_enabled", False):
+            if hasattr(self, "_draw_auto_visual_locations"):
+                self._draw_auto_visual_locations(bounce_offset)
+            return
+
         if not self.simulation_mode:
             self._draw_player_offer_markers(bounce_offset)
 
@@ -247,6 +252,12 @@ class GameRendererMixin:
 
         draw_x = x + (cell_w - draw_w) // 2
         draw_y = y + cell_h - draw_h
+
+        if self.simulation_mode and getattr(self, "auto_visual_enabled", False):
+            offset_x, offset_y = getattr(shipper, "auto_visual_offset", (0, 0))
+            draw_x += offset_x
+            draw_y += offset_y
+
         self.screen.blit(sprite, (draw_x, draw_y))
 
     def _draw_matrix_overlay(self) -> None:
@@ -277,12 +288,23 @@ class GameRendererMixin:
             self._draw_path(self.player_path_hint, (255, 245, 50), radius=4, width=4, glow=True)
             return
 
-        colors = [(255, 80, 80), (60, 235, 125), (255, 180, 55), (165, 125, 255)]
+        fallback_colors = [
+            (255, 80, 80),
+            (60, 235, 125),
+            (255, 180, 55),
+        ]
 
         for i, npc in enumerate(self.npc_shippers):
+            color = getattr(
+                npc,
+                "auto_visual_color",
+                fallback_colors[i % len(fallback_colors)],
+            )
+            offset = getattr(npc, "auto_visual_offset", (0, 0))
+
             path = [self._movement_base_pos(npc)] + list(self.npc_paths.get(npc.name, []))
-            self._draw_path(path, colors[i % len(colors)], radius=5, width=5, glow=True)
-            self._draw_algorithm_label(npc, colors[i % len(colors)])
+            self._draw_path(path, color, radius=5, width=5, glow=True, offset=offset)
+            self._draw_algorithm_label(npc, color)
 
     def _draw_path(
         self,
@@ -291,6 +313,7 @@ class GameRendererMixin:
         radius: int = 3,
         width: int = 3,
         glow: bool = False,
+        offset: tuple[int, int] = (0, 0),
     ) -> None:
         if not path:
             return
@@ -298,11 +321,21 @@ class GameRendererMixin:
         cell_w, cell_h = self._cell_size_screen()
         anchor_points = []
 
+        offset_x, offset_y = offset
+
         for gx, gy in path:
             x, y = self._grid_to_screen((gx, gy))
-            anchor_points.append((x + cell_w // 2, y + cell_h // 2))
+            anchor_points.append(
+                (
+                    x + cell_w // 2 + offset_x,
+                    y + cell_h // 2 + offset_y,
+                )
+            )
 
-        points = self._path_render_points(path, cell_w, cell_h)
+        points = [
+            (px + offset_x, py + offset_y)
+            for px, py in self._path_render_points(path, cell_w, cell_h)
+        ]
 
         if len(points) >= 2:
             if glow:
@@ -359,8 +392,15 @@ class GameRendererMixin:
         label = str(getattr(npc, "algorithm", npc.name))
         text = self.font_tiny.render(label, True, (255, 255, 255))
         pad_x, pad_y = 6, 3
-        rect = pygame.Rect(x, y - 22, text.get_width() + pad_x * 2, text.get_height() + pad_y * 2)
-        rect.centerx = x + cell_w // 2
+        offset_x, offset_y = getattr(npc, "auto_visual_offset", (0, 0))
+
+        rect = pygame.Rect(
+            x,
+            y - 22 + offset_y,
+            text.get_width() + pad_x * 2,
+            text.get_height() + pad_y * 2,
+        )
+        rect.centerx = x + cell_w // 2 + offset_x
 
         panel = pygame.Surface((rect.width, rect.height), pygame.SRCALPHA)
         panel.fill((10, 14, 22, 165))

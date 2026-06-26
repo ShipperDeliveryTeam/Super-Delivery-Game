@@ -1,85 +1,78 @@
-import random
+from __future__ import annotations
+
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable, List, Optional, Tuple
+from typing import Tuple
+
 
 GridPos = Tuple[int, int]
+PathCostFn = Callable[[GridPos, GridPos], float]
 
 
-@dataclass
+@dataclass(frozen=True)
 class StoreSelectionResult:
     selected_store: GridPos
     customer_pos: GridPos
-    cost: int
+    cost: float
+    expanded_nodes: int
+    generated_nodes: int
     iterations: int
-    algorithm: str = "LOCAL_SEARCH"
+    algorithm: str = "STORE_SELECTOR"
 
 
 class StoreSelector:
     """
-    Local Search: khách hàng chọn cửa hàng phù hợp nhất để đặt hàng.
+    Local Search đơn giản dùng cho Play Mode.
+
+    Nhiệm vụ:
+    - Nhận danh sách store.
+    - Nhận vị trí customer/house.
+    - Chọn store có chi phí đi đến customer thấp nhất.
+
+    File này chủ yếu phục vụ OrderGenerator cũ của Play Mode.
+    Auto-Mode không phụ thuộc trực tiếp vào file này.
     """
 
-    def __init__(self, max_iterations: int = 20):
+    def __init__(self, max_iterations: int = 20) -> None:
         self.max_iterations = max_iterations
 
     def select_store(
         self,
-        stores: List[GridPos],
+        stores: list[GridPos],
         customer_pos: GridPos,
-        path_cost_fn: Optional[Callable[[GridPos, GridPos], int]] = None,
+        path_cost_fn: PathCostFn,
     ) -> StoreSelectionResult:
         if not stores:
-            raise ValueError("Không có cửa hàng nào để chọn.")
+            raise ValueError("StoreSelector requires at least one store.")
 
-        current = random.choice(stores)
-        current_cost = self._cost(current, customer_pos, path_cost_fn)
+        best_store = stores[0]
+        best_cost = float("inf")
+
+        expanded_nodes = 0
+        generated_nodes = len(stores)
         iterations = 0
 
-        candidates = list(stores)
-        random.shuffle(candidates)
+        for store in stores:
+            if iterations >= self.max_iterations:
+                break
 
-        improved = True
-
-        while improved and iterations < self.max_iterations:
-            improved = False
             iterations += 1
+            expanded_nodes += 1
 
-            best_store = current
-            best_cost = current_cost
+            cost = path_cost_fn(store, customer_pos)
 
-            for store in candidates:
-                cost = self._cost(store, customer_pos, path_cost_fn)
+            if cost < best_cost:
+                best_cost = cost
+                best_store = store
 
-                if cost < best_cost:
-                    best_store = store
-                    best_cost = cost
-                    improved = True
-
-            if improved:
-                current = best_store
-                current_cost = best_cost
+        if best_cost == float("inf"):
+            best_cost = 0.0
 
         return StoreSelectionResult(
-            selected_store=current,
+            selected_store=best_store,
             customer_pos=customer_pos,
-            cost=current_cost,
+            cost=best_cost,
+            expanded_nodes=expanded_nodes,
+            generated_nodes=generated_nodes,
             iterations=iterations,
         )
-
-    def _cost(
-        self,
-        store: GridPos,
-        customer: GridPos,
-        path_cost_fn: Optional[Callable[[GridPos, GridPos], int]] = None,
-    ) -> int:
-        if path_cost_fn is not None:
-            cost = path_cost_fn(store, customer)
-
-            if cost > 0:
-                return cost
-
-        return self.manhattan(store, customer)
-
-    @staticmethod
-    def manhattan(a: GridPos, b: GridPos) -> int:
-        return abs(a[0] - b[0]) + abs(a[1] - b[1])

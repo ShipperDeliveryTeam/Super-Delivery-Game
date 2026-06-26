@@ -234,6 +234,13 @@ class MenuMixin:
             self._handle_gameplay_mouse_click(pos)
             return
 
+        if self.state == GameState.SIMULATION:
+            if hasattr(self, "_handle_auto_visual_mouse_click"):
+                handled = self._handle_auto_visual_mouse_click(pos)
+                if handled:
+                    return
+            return
+
         if self.state != GameState.MENU:
             return
 

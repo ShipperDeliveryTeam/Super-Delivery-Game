@@ -64,7 +64,7 @@ class MapManagerMixin:
         return self._asset_maps_dir() / f"map_{map_id}_matrix.csv"
 
     def _allow_diagonal_movement(self) -> bool:
-        return self.settings.selected_map_id == 2
+        return self.settings.selected_map_id in (2, 3)
 
     def _roundabout_center(self) -> tuple[float, float] | None:
         return (23.5, 16.0) if self.settings.selected_map_id == 2 else None

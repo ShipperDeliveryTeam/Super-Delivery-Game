@@ -35,6 +35,10 @@ from src.ui.left_order_card import LeftOrderCardMixin
 
 class HudMixin(LeftInformationCardMixin, LeftActiveDeliveryCardMixin, LeftOrderCardMixin):
     def _draw_simulation_hud(self) -> None:
+        if getattr(self, "auto_visual_enabled", False):
+            self._draw_auto_visual_hud()
+            return
+
         top_bar = pygame.Rect(0, 0, SCREEN_WIDTH, 34)
         self._draw_panel(top_bar, alpha=115, border=False)
         text = f"SIMULATION | Map {self.settings.selected_map_id} | Time {self.elapsed_time:05.1f}s | ESC Pause | P Path | G Grid"
@@ -56,6 +60,136 @@ class HudMixin(LeftInformationCardMixin, LeftActiveDeliveryCardMixin, LeftOrderC
             target = task.target_pos if task else "-"
             label = f"{npc.name}: {getattr(npc, 'algorithm', '')} -> {target}"
             self._draw_text(label, self.font_tiny, (245, 245, 245), board.x + 34, y)
+            y += row_h
+
+    def _draw_auto_visual_hud(self) -> None:
+        from src.gameplay.auto.algorithm_groups import get_group_name
+
+        top_bar = pygame.Rect(0, 0, SCREEN_WIDTH, 40)
+        self._draw_panel(top_bar, alpha=125, border=False)
+
+        group_id = int(getattr(self, "auto_visual_group_id", 1))
+        group_name = get_group_name(group_id)
+        status = "DONE" if getattr(self, "auto_visual_finished", False) else "RUNNING"
+        error = getattr(self, "auto_visual_error", "")
+        if error:
+            status = "ERROR"
+
+        text = (
+            f"AUTO-MODE VISUAL | Map {self.settings.selected_map_id} | "
+            f"Group {group_id}: {group_name} | 3 algorithms | {status} | ESC Pause | P Path | G Grid"
+        )
+        self._draw_text(text, self.font_tiny, (255, 255, 255), 12, 11)
+
+        # Group select buttons. Click G1..G6 to restart visual demo for that group.
+        # Vẽ thành panel lớn, rõ chữ, không bị lẫn vào nền map.
+        self.auto_visual_group_button_rects = {}
+        selector_panel = pygame.Rect(12, 48, 760, 62)
+        self._draw_panel(selector_panel, alpha=185, border=True)
+        self._draw_text(
+            "CHỌN NHÓM:",
+            self.font_tiny_bold,
+            (255, 235, 130),
+            selector_panel.x + 14,
+            selector_panel.y + 10,
+        )
+        self._draw_text(
+            "Click G1..G6 để đổi nhóm thuật toán",
+            self.font_tiny,
+            (220, 240, 255),
+            selector_panel.x + 14,
+            selector_panel.y + 35,
+        )
+
+        button_w = 86
+        button_h = 38
+        gap = 8
+        start_x = selector_panel.x + 150
+        y_button = selector_panel.y + 12
+
+        for current_group_id in range(1, 7):
+            rect = pygame.Rect(
+                start_x + (current_group_id - 1) * (button_w + gap),
+                y_button,
+                button_w,
+                button_h,
+            )
+            self.auto_visual_group_button_rects[current_group_id] = rect
+
+            active = current_group_id == group_id
+            bg = (255, 204, 70) if active else (25, 58, 92)
+            border = (255, 245, 170) if active else (100, 170, 220)
+            text_color = (18, 36, 58) if active else (235, 245, 255)
+
+            pygame.draw.rect(self.screen, bg, rect, border_radius=10)
+            pygame.draw.rect(self.screen, border, rect, width=3 if active else 2, border_radius=10)
+            self._draw_text(
+                f"G{current_group_id}",
+                self.font_small,
+                text_color,
+                rect.centerx,
+                rect.y + 7,
+                center=True,
+            )
+
+        board_w = 560
+        row_h = 48
+        plans = list(getattr(self, "auto_visual_plans", []))
+        board_h = 62 + max(1, len(plans)) * row_h + 8
+        board = pygame.Rect(SCREEN_WIDTH - board_w - 12, 116, board_w, board_h)
+        self._draw_panel(board, alpha=150, border=True)
+
+        self._draw_text(
+            f"GROUP {group_id}: {group_name}",
+            self.font_small,
+            (255, 230, 110),
+            board.x + 16,
+            board.y + 12,
+        )
+        self._draw_text(
+            "Click G1..G6 để đổi nhóm - mỗi nhóm chạy 3 shipper",
+            self.font_tiny,
+            (185, 220, 245),
+            board.x + 16,
+            board.y + 36,
+        )
+
+        if error:
+            self._draw_text(error[:70], self.font_tiny, (255, 120, 120), board.x + 16, board.y + 60)
+            return
+
+        colors = [
+            (255, 80, 80),
+            (60, 235, 125),
+            (255, 180, 55),
+        ]
+
+        y = board.y + 64
+        shippers_by_algorithm = {
+            getattr(npc, "algorithm", ""): npc
+            for npc in getattr(self, "npc_shippers", [])
+        }
+
+        for index, plan in enumerate(plans):
+            npc = shippers_by_algorithm.get(plan.algorithm)
+            color = (
+                getattr(npc, "auto_visual_color", colors[index % len(colors)])
+                if npc
+                else colors[index % len(colors)]
+            )
+            done = bool(npc and self.auto_visual_completed.get(npc.name, False))
+            current_pos = npc.grid_pos if npc else "-"
+            progress = "DONE" if done else str(current_pos)
+
+            pygame.draw.circle(self.screen, color, (board.x + 22, y + 13), 7)
+            label = (
+                f"{index + 1}. {plan.algorithm}: "
+                f"cost={round(plan.total_cost, 1)} | expanded={plan.expanded_nodes} | {progress}"
+            )
+            self._draw_text(label, self.font_tiny, (245, 245, 245), board.x + 40, y)
+
+            note = plan.note or plan.group_name
+            self._draw_text(note[:70], self.font_tiny, (180, 210, 235), board.x + 40, y + 19)
             y += row_h
 
     def _draw_hud_clean(self) -> None:
