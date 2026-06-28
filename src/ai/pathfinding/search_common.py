@@ -20,43 +20,38 @@ class SearchResult:
 
     @property
     def found(self) -> bool:
-        return bool(self.path)
+        return len(self.path) > 0
+
+    @property
+    def success(self) -> bool:
+        return self.found
 
 
-def reconstruct_path(
-    came_from: dict[GridPos, GridPos | None],
-    goal: GridPos,
-) -> list[GridPos]:
-    path: list[GridPos] = []
-    current: GridPos | None = goal
+def reconstruct_path(parent, goal):
+    path = []
+    current = goal
 
     while current is not None:
         path.append(current)
-        current = came_from[current]
+        current = parent[current]
 
     path.reverse()
     return path
 
 
-def calculate_path_cost(
-    path: list[GridPos],
-    get_neighbors: NeighborFn,
-) -> float:
+def calculate_path_cost(path, get_neighbors):
     if len(path) <= 1:
-        return 0.0
+        return 0
 
-    total_cost = 0.0
+    total = 0
 
-    for current, next_pos in zip(path, path[1:]):
-        found_edge = False
+    for i in range(len(path) - 1):
+        current = path[i]
+        next_pos = path[i + 1]
 
         for neighbor, step_cost in get_neighbors(current):
             if neighbor == next_pos:
-                total_cost += step_cost
-                found_edge = True
+                total += step_cost
                 break
 
-        if not found_edge:
-            return float("inf")
-
-    return total_cost
+    return total

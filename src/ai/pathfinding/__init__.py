@@ -1,5 +1,13 @@
-"""Extensible pathfinding algorithms for the in-game Maps application.
+from src.ai.pathfinding.uninformed_search import bfs, dfs, ucs
+from src.ai.pathfinding.informed_search import astar, greedy, greedy_best_first_search, ida_star
 
-Implementations can be migrated out of ``GamePathfinder`` into this package
-without coupling them to Pygame or rendering code.
-"""
+
+__all__ = [
+    "bfs",
+    "dfs",
+    "ucs",
+    "greedy",
+    "greedy_best_first_search",
+    "astar",
+    "ida_star",
+]

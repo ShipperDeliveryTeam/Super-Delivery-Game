@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from src.ai.adversarial.alpha_beta import alpha_beta_search
-from src.ai.adversarial.expectimax import expectimax_search
-from src.ai.adversarial.minimax import minimax_search
+from src.ai.pathfinding.adversarial.alpha_beta import alpha_beta_search
+from src.ai.pathfinding.adversarial.expectimax import expectimax_search
+from src.ai.pathfinding.adversarial.minimax import minimax_search
 from src.gameplay.auto.order_factory import load_orders_for_map
 from src.gameplay.auto.route_cost_matrix import build_route_cost_matrix
 

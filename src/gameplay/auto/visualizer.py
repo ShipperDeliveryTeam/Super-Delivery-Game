@@ -4,22 +4,18 @@ from dataclasses import dataclass
 from time import perf_counter
 from typing import Iterable
 
-from src.ai.adversarial.alpha_beta import alpha_beta_search
-from src.ai.adversarial.expectimax import expectimax_search
-from src.ai.adversarial.minimax import minimax_search
-from src.ai.complex_search.and_or_graph import and_or_search
-from src.ai.complex_search.no_observation import no_observation_search
-from src.ai.complex_search.partial_observation import partial_observation_search
-from src.ai.complex_search.uncertainty_model import UncertaintyModel
-from src.ai.csp.ac3_backtracking import ac3_backtracking_search
-from src.ai.csp.backtracking import backtracking_search
-from src.ai.csp.forward_checking import forward_checking_search
-from src.ai.local_search.hill_climbing import hill_climbing
-from src.ai.local_search.local_beam import local_beam_search
-from src.ai.local_search.route_state import build_default_route_actions
-from src.ai.local_search.simulated_annealing import simulated_annealing
+from src.ai.pathfinding.adversarial.alpha_beta import alpha_beta_search
+from src.ai.pathfinding.adversarial.expectimax import expectimax_search
+from src.ai.pathfinding.adversarial.minimax import minimax_search
+from src.ai.pathfinding.complex_search import and_or_search, no_observation_search, partial_observation_search
+from src.ai.pathfinding.complex_search.no_observation import union_belief_traps
+from src.ai.pathfinding.csp.ac3_backtracking import ac3_backtracking_search
+from src.ai.pathfinding.csp.backtracking import backtracking_search
+from src.ai.pathfinding.csp.forward_checking import forward_checking_search
 from src.gameplay.auto.algorithm_groups import get_algorithms_by_group, get_group_name
 from src.gameplay.auto.config import get_auto_map_config
+from src.gameplay.auto.complex_traps import build_trap_setup
+from src.gameplay.auto.delivery_search import delivery_search
 from src.gameplay.auto.maps.graph_adapter import AutoMapGraph
 from src.gameplay.auto.maps.tmx_loader import GridPos, load_auto_map
 from src.gameplay.auto.order_factory import load_orders_for_map
@@ -38,6 +34,13 @@ class AutoVisualAgentPlan:
     expanded_nodes: int
     runtime_ms: float
     note: str = ""
+    hidden_traps: tuple[GridPos, ...] = ()
+    belief_traps: tuple[GridPos, ...] = ()
+    belief_states: tuple[tuple[GridPos, ...], ...] = ()
+    known_traps: tuple[GridPos, ...] = ()
+    belief_count: int = 0
+    alternative_paths: tuple[tuple[GridPos, ...], ...] = ()
+    alternative_actions: tuple[tuple[str, ...], ...] = ()
 
     @property
     def completed_orders(self) -> int:
@@ -68,10 +71,6 @@ def _node_path_from_actions(
     return full_path
 
 
-def _default_actions(order_ids: list[str]) -> tuple[str, ...]:
-    return build_default_route_actions(order_ids)
-
-
 def _build_pathfinding_plan(
     map_id: int,
     group_id: int,
@@ -80,261 +79,204 @@ def _build_pathfinding_plan(
 ) -> AutoVisualAgentPlan:
     started_at = perf_counter()
     map_data = load_auto_map(map_id)
-    graph = AutoMapGraph(map_data)
     orders = load_orders_for_map(map_id)
-    order_ids = [order.id for order in orders]
 
-    node_positions: dict[str, GridPos] = {"START": map_data.start_position}
-    for order in orders:
-        node_positions[f"P_{order.id}"] = order.store_pos
-        node_positions[f"D_{order.id}"] = order.customer_pos
+    result = delivery_search(
+        map_data=map_data,
+        orders=orders,
+        algorithm=algorithm,
+    )
 
-    actions = _default_actions(order_ids)
-    current_pos = map_data.start_position
-    full_path: list[GridPos] = [current_pos]
-    total_cost = 0.0
-    expanded_nodes = 0
-    note = "Sequential route"
-
-    for action in actions:
-        target_pos = node_positions[action]
-        result = find_auto_path(
-            graph=graph,
-            start=current_pos,
-            goal=target_pos,
-            algorithm=algorithm,
-        )
-
-        expanded_nodes += result.expanded_nodes
-
-        if not result.found:
-            note = f"Stopped before {action}"
-            break
-
-        total_cost += result.cost
-        full_path.extend(result.path[1:])
-        current_pos = target_pos
+    note = "Delivery-state search"
+    if not result.found:
+        note = "Stopped before all orders"
 
     return AutoVisualAgentPlan(
         group_id=group_id,
         group_name=group_name,
         algorithm=algorithm,
-        actions=actions,
-        path=full_path,
-        total_cost=total_cost,
-        expanded_nodes=expanded_nodes,
+        actions=result.actions,
+        path=result.path or [map_data.start_position],
+        total_cost=result.cost,
+        expanded_nodes=result.expanded_nodes,
         runtime_ms=(perf_counter() - started_at) * 1000,
         note=note,
     )
 
 
-def _build_hill_climbing_plan(
+def _build_local_search_plan(
     map_id: int,
     group_id: int,
     group_name: str,
-    matrix: RouteCostMatrix,
+    algorithm: str,
 ) -> AutoVisualAgentPlan:
     started_at = perf_counter()
-    config = get_auto_map_config(map_id)
+    map_data = load_auto_map(map_id)
     orders = load_orders_for_map(map_id)
-    order_ids = [order.id for order in orders]
 
-    result = hill_climbing(
-        order_ids=order_ids,
-        capacity=config.capacity,
-        cost_provider=matrix,
-        max_iterations=100,
+    result = delivery_search(
+        map_data=map_data,
+        orders=orders,
+        algorithm=algorithm,
     )
 
-    actions = result.best_state.actions
+    note = "Local path search by 4 directions"
+    if not result.found or len(result.actions) < len(orders) * 2:
+        note = "Stopped at local optimum"
 
     return AutoVisualAgentPlan(
         group_id=group_id,
         group_name=group_name,
-        algorithm="HILL_CLIMBING",
-        actions=actions,
-        path=_node_path_from_actions(matrix, actions),
-        total_cost=result.best_state.total_cost,
+        algorithm=algorithm,
+        actions=result.actions,
+        path=result.path or [map_data.start_position],
+        total_cost=result.cost,
         expanded_nodes=result.expanded_nodes,
         runtime_ms=(perf_counter() - started_at) * 1000,
-        note="Local optimum",
+        note=note,
     )
 
 
-def _build_local_beam_plan(
+def _build_complex_astar_plan(
     map_id: int,
     group_id: int,
     group_name: str,
-    matrix: RouteCostMatrix,
+    algorithm: str,
 ) -> AutoVisualAgentPlan:
     started_at = perf_counter()
-    config = get_auto_map_config(map_id)
+    map_data = load_auto_map(map_id)
     orders = load_orders_for_map(map_id)
     order_ids = [order.id for order in orders]
+    trap_setup = build_trap_setup(map_data, orders, algorithm)
 
-    result = local_beam_search(
-        order_ids=order_ids,
-        capacity=config.capacity,
-        cost_provider=matrix,
-        beam_width=5,
-        max_iterations=100,
-        seed=42,
+    if algorithm == "NO_OBSERVATION":
+        complex_result = no_observation_search(
+            order_ids=order_ids,
+            possible_traps=trap_setup.possible_traps,
+            max_traps=len(trap_setup.traps),
+        )
+        astar_traps = union_belief_traps(complex_result.belief_states)
+    elif algorithm == "PARTIAL_OBSERVATION":
+        known_traps = trap_setup.traps[:2]
+        complex_result = partial_observation_search(
+            order_ids=order_ids,
+            possible_traps=trap_setup.possible_traps,
+            known_traps=known_traps,
+            max_traps=len(trap_setup.traps),
+        )
+        astar_traps = union_belief_traps(complex_result.belief_states)
+    else:
+        complex_result = and_or_search(
+            order_ids=order_ids,
+            possible_traps=trap_setup.possible_traps,
+            max_traps=len(trap_setup.traps),
+        )
+        astar_traps = union_belief_traps(complex_result.belief_states)
+
+    alternative_paths: list[tuple[GridPos, ...]] = []
+    alternative_actions: list[tuple[str, ...]] = []
+    if algorithm == "AND_OR_SEARCH":
+        for belief in complex_result.belief_states:
+            alt_result = delivery_search(
+                map_data=map_data,
+                orders=orders,
+                algorithm="ASTAR",
+                trap_cells=belief.traps,
+            )
+            if alt_result.path and len(alt_result.actions) == len(orders) * 2:
+                alt_path = tuple(alt_result.path)
+                alt_actions = tuple(alt_result.actions)
+                if alt_path not in alternative_paths:
+                    alternative_paths.append(alt_path)
+                    alternative_actions.append(alt_actions)
+
+    if algorithm == "AND_OR_SEARCH":
+        contingency_sets = []
+
+        for trap in trap_setup.traps:
+            contingency_sets.append((trap,))
+
+        for first_index in range(len(trap_setup.traps)):
+            for second_index in range(first_index + 1, len(trap_setup.traps)):
+                contingency_sets.append((
+                    trap_setup.traps[first_index],
+                    trap_setup.traps[second_index],
+                ))
+
+        contingency_sets.append(tuple(trap_setup.traps))
+
+        for trap_cells in contingency_sets:
+            alt_result = delivery_search(
+                map_data=map_data,
+                orders=orders,
+                algorithm="ASTAR",
+                trap_cells=trap_cells,
+            )
+            if alt_result.path and len(alt_result.actions) == len(orders) * 2:
+                alt_path = tuple(alt_result.path)
+                alt_actions = tuple(alt_result.actions)
+                if alt_path not in alternative_paths:
+                    alternative_paths.append(alt_path)
+                    alternative_actions.append(alt_actions)
+
+    if algorithm == "AND_OR_SEARCH" and not alternative_paths:
+        safe_result = delivery_search(
+            map_data=map_data,
+            orders=orders,
+            algorithm="ASTAR",
+            trap_cells=(),
+        )
+        if safe_result.path and len(safe_result.actions) == len(orders) * 2:
+            alternative_paths.append(tuple(safe_result.path))
+            alternative_actions.append(tuple(safe_result.actions))
+
+    result = delivery_search(
+        map_data=map_data,
+        orders=orders,
+        algorithm="ASTAR",
+        trap_cells=astar_traps,
     )
 
-    actions = result.best_state.actions
+    if algorithm == "AND_OR_SEARCH" and len(result.actions) == len(orders) * 2:
+        main_path = tuple(result.path)
+        if main_path not in alternative_paths:
+            alternative_paths.append(main_path)
+            alternative_actions.append(tuple(result.actions))
+
+    if algorithm == "AND_OR_SEARCH" and alternative_paths:
+        result.path = list(alternative_paths[0])
+        result.actions = alternative_actions[0]
+
+    if algorithm == "AND_OR_SEARCH":
+        note = (
+            f"{complex_result.risk_mode}, "
+            f"cases={len(complex_result.belief_states)}, "
+            f"plans={len(alternative_paths)}"
+        )
+    else:
+        note = (
+            f"{complex_result.risk_mode}, "
+            f"belief={len(complex_result.belief_states)}, "
+            f"A* né={len(astar_traps)} ô"
+        )
 
     return AutoVisualAgentPlan(
         group_id=group_id,
         group_name=group_name,
-        algorithm="LOCAL_BEAM",
-        actions=actions,
-        path=_node_path_from_actions(matrix, actions),
-        total_cost=result.best_state.total_cost,
-        expanded_nodes=result.expanded_nodes,
+        algorithm=algorithm,
+        actions=result.actions,
+        path=result.path or [map_data.start_position],
+        total_cost=result.cost,
+        expanded_nodes=complex_result.expanded_nodes + result.expanded_nodes,
         runtime_ms=(perf_counter() - started_at) * 1000,
-        note="Beam width = 5",
-    )
-
-
-def _build_simulated_annealing_plan(
-    map_id: int,
-    group_id: int,
-    group_name: str,
-    matrix: RouteCostMatrix,
-    visual_safe: bool,
-) -> AutoVisualAgentPlan:
-    started_at = perf_counter()
-    config = get_auto_map_config(map_id)
-    orders = load_orders_for_map(map_id)
-    order_ids = [order.id for order in orders]
-
-    result = simulated_annealing(
-        order_ids=order_ids,
-        capacity=config.capacity,
-        cost_provider=matrix,
-        initial_temperature=120.0,
-        cooling_rate=0.985,
-        min_temperature=0.01,
-        max_iterations=350 if visual_safe else 1000,
-        seed=42,
-        restart_count=3 if visual_safe else 8,
-    )
-
-    actions = result.best_state.actions
-
-    return AutoVisualAgentPlan(
-        group_id=group_id,
-        group_name=group_name,
-        algorithm="SIMULATED_ANNEALING",
-        actions=actions,
-        path=_node_path_from_actions(matrix, actions),
-        total_cost=result.best_state.total_cost,
-        expanded_nodes=result.expanded_nodes,
-        runtime_ms=(perf_counter() - started_at) * 1000,
-        note="Visual preset nhẹ" if visual_safe else "Benchmark preset",
-    )
-
-
-def _build_no_observation_plan(
-    map_id: int,
-    group_id: int,
-    group_name: str,
-    matrix: RouteCostMatrix,
-) -> AutoVisualAgentPlan:
-    started_at = perf_counter()
-    config = get_auto_map_config(map_id)
-    orders = load_orders_for_map(map_id)
-    order_ids = [order.id for order in orders]
-    uncertainty_model = UncertaintyModel(matrix)
-
-    result = no_observation_search(
-        order_ids=order_ids,
-        capacity=config.capacity,
-        uncertainty_model=uncertainty_model,
-    )
-
-    actions = result.actions
-
-    return AutoVisualAgentPlan(
-        group_id=group_id,
-        group_name=group_name,
-        algorithm="NO_OBSERVATION",
-        actions=actions,
-        path=_node_path_from_actions(matrix, actions),
-        total_cost=result.normal_cost,
-        expanded_nodes=result.expanded_nodes,
-        runtime_ms=(perf_counter() - started_at) * 1000,
-        note="Expected risk cost",
-    )
-
-
-def _build_partial_observation_plan(
-    map_id: int,
-    group_id: int,
-    group_name: str,
-    matrix: RouteCostMatrix,
-) -> AutoVisualAgentPlan:
-    started_at = perf_counter()
-    config = get_auto_map_config(map_id)
-    orders = load_orders_for_map(map_id)
-    order_ids = [order.id for order in orders]
-    uncertainty_model = UncertaintyModel(matrix)
-
-    result = partial_observation_search(
-        order_ids=order_ids,
-        capacity=config.capacity,
-        uncertainty_model=uncertainty_model,
-        max_iterations=100,
-    )
-
-    actions = result.actions
-
-    return AutoVisualAgentPlan(
-        group_id=group_id,
-        group_name=group_name,
-        algorithm="PARTIAL_OBSERVATION",
-        actions=actions,
-        path=_node_path_from_actions(matrix, actions),
-        total_cost=result.normal_cost,
-        expanded_nodes=result.expanded_nodes,
-        runtime_ms=(perf_counter() - started_at) * 1000,
-        note="Partial risk cost",
-    )
-
-
-def _build_and_or_plan(
-    map_id: int,
-    group_id: int,
-    group_name: str,
-    matrix: RouteCostMatrix,
-) -> AutoVisualAgentPlan:
-    started_at = perf_counter()
-    config = get_auto_map_config(map_id)
-    orders = load_orders_for_map(map_id)
-    order_ids = [order.id for order in orders]
-    uncertainty_model = UncertaintyModel(matrix)
-
-    result = and_or_search(
-        order_ids=order_ids,
-        capacity=config.capacity,
-        uncertainty_model=uncertainty_model,
-        beam_width=5,
-        max_iterations=100,
-        seed=42,
-    )
-
-    actions = result.actions
-
-    return AutoVisualAgentPlan(
-        group_id=group_id,
-        group_name=group_name,
-        algorithm="AND_OR_SEARCH",
-        actions=actions,
-        path=_node_path_from_actions(matrix, actions),
-        total_cost=result.normal_cost,
-        expanded_nodes=result.expanded_nodes,
-        runtime_ms=(perf_counter() - started_at) * 1000,
-        note="Worst-case route",
+        note=note,
+        hidden_traps=trap_setup.traps,
+        belief_traps=astar_traps,
+        belief_states=tuple(belief.traps for belief in complex_result.belief_states),
+        known_traps=complex_result.known_traps,
+        belief_count=len(complex_result.belief_states),
+        alternative_paths=tuple(alternative_paths),
+        alternative_actions=tuple(alternative_actions),
     )
 
 
@@ -495,18 +437,10 @@ def build_auto_visual_plans(
     for algorithm in algorithms:
         if group_id in (1, 2):
             plans.append(_build_pathfinding_plan(map_id, group_id, group_name, algorithm))
-        elif algorithm == "HILL_CLIMBING":
-            plans.append(_build_hill_climbing_plan(map_id, group_id, group_name, matrix))
-        elif algorithm == "LOCAL_BEAM":
-            plans.append(_build_local_beam_plan(map_id, group_id, group_name, matrix))
-        elif algorithm == "SIMULATED_ANNEALING":
-            plans.append(_build_simulated_annealing_plan(map_id, group_id, group_name, matrix, visual_safe))
-        elif algorithm == "NO_OBSERVATION":
-            plans.append(_build_no_observation_plan(map_id, group_id, group_name, matrix))
-        elif algorithm == "PARTIAL_OBSERVATION":
-            plans.append(_build_partial_observation_plan(map_id, group_id, group_name, matrix))
-        elif algorithm == "AND_OR_SEARCH":
-            plans.append(_build_and_or_plan(map_id, group_id, group_name, matrix))
+        elif algorithm in ("SIMPLE_HILL", "STEEPEST_HILL", "LOCAL_BEAM"):
+            plans.append(_build_local_search_plan(map_id, group_id, group_name, algorithm))
+        elif algorithm in ("NO_OBSERVATION", "PARTIAL_OBSERVATION", "AND_OR_SEARCH"):
+            plans.append(_build_complex_astar_plan(map_id, group_id, group_name, algorithm))
         elif algorithm == "BACKTRACKING":
             plans.append(_build_backtracking_plan(map_id, group_id, group_name, matrix))
         elif algorithm == "FORWARD_CHECKING":

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from math import sqrt
 
 from src.gameplay.auto.maps.graph_adapter import AutoMapGraph
 from src.gameplay.auto.maps.tmx_loader import GridPos, load_auto_map
@@ -50,6 +51,21 @@ class RouteCostMatrix:
             return float("inf")
 
         return entry.cost
+
+    def get_heuristic_cost(self, from_label: str, to_label: str) -> float:
+        if from_label == to_label:
+            return 0.0
+
+        from_node = self.nodes.get(from_label)
+        to_node = self.nodes.get(to_label)
+        if from_node is None or to_node is None:
+            return float("inf")
+
+        dx = abs(from_node.pos[0] - to_node.pos[0])
+        dy = abs(from_node.pos[1] - to_node.pos[1])
+        if self.map_id == 1:
+            return float(dx + dy)
+        return sqrt(dx * dx + dy * dy)
 
     def get_path(self, from_label: str, to_label: str) -> list[GridPos]:
         entry = self.costs.get((from_label, to_label))

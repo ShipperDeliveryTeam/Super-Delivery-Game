@@ -1,7 +1,7 @@
 import random
 from typing import List, Optional, Tuple
 
-from src.ai.local_search.store_selector import StoreSelector, StoreSelectionResult
+from src.gameplay.store_selector import StoreSelector, StoreSelectionResult
 from src.gameplay.delivery_task import DeliveryTask
 
 GridPos = Tuple[int, int]

@@ -1,12 +1,8 @@
 from __future__ import annotations
 
-from src.ai.pathfinding.astar import astar
-from src.ai.pathfinding.bfs import bfs
-from src.ai.pathfinding.dfs import dfs
-from src.ai.pathfinding.greedy import greedy
-from src.ai.pathfinding.ida_star import ida_star
+from src.ai.pathfinding.informed_search import astar, greedy, ida_star
 from src.ai.pathfinding.search_common import GridPos, SearchResult
-from src.ai.pathfinding.ucs import ucs
+from src.ai.pathfinding.uninformed_search import bfs, dfs, ucs
 from src.gameplay.auto.maps.graph_adapter import AutoMapGraph
 
 

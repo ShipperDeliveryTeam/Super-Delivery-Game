@@ -93,7 +93,7 @@ def build_representative_summary(rows: list[dict[str, str]]) -> str:
     lines.append("")
     lines.append("- Nhóm 1: UCS")
     lines.append("- Nhóm 2: A*")
-    lines.append("- Nhóm 3: Simulated Annealing")
+    lines.append("- Nhóm 3: Local Beam")
     lines.append("- Nhóm 4: AND-OR Search")
     lines.append("- Nhóm 5: Forward Checking")
     lines.append("- Nhóm 6: Alpha-Beta")
@@ -139,7 +139,7 @@ Từ kết quả thực nghiệm, có thể rút ra một số nhận xét chín
 - UCS ổn định hơn BFS và DFS trên bản đồ có trọng số vì luôn ưu tiên đường có tổng chi phí thấp.
 - A* là thuật toán đại diện phù hợp cho nhóm tìm kiếm có thông tin vì cân bằng tốt giữa chi phí đường đi và số node mở rộng.
 - IDA* có thể tìm được đường tốt nhưng dễ tốn thời gian khi chạy nhiều chặng trên bản đồ có cost phức tạp, điển hình là Map 2.
-- Simulated Annealing phù hợp cho bài toán tối ưu thứ tự nhận/giao vì có khả năng thoát khỏi cực trị cục bộ.
+- Local Beam phù hợp cho bài toán tối ưu thứ tự nhận/giao vì có khả năng thoát khỏi cực trị cục bộ.
 - AND-OR Search phù hợp với môi trường bất định vì xét đến trường hợp rủi ro hoặc worst-case.
 - Forward Checking hiệu quả hơn Backtracking thuần vì có khả năng loại nhánh sớm khi vi phạm ràng buộc.
 - Alpha-Beta cho kết quả tương đương Minimax nhưng mở rộng ít node hơn nhờ cơ chế cắt tỉa.

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from src.ai.pathfinding.astar import astar
-from src.ai.pathfinding.greedy import greedy
-from src.ai.pathfinding.ida_star import ida_star
+from src.ai.pathfinding.informed_search.astar import astar
+from src.ai.pathfinding.informed_search.greedy import greedy
+from src.ai.pathfinding.informed_search.ida_star import ida_star
 from src.gameplay.auto.maps.graph_adapter import AutoMapGraph
 from src.gameplay.auto.maps.tmx_loader import load_auto_map
 from src.gameplay.auto.order_factory import load_orders_for_map

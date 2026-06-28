@@ -78,7 +78,7 @@ def plot_representative_charts() -> None:
     algorithms = [
         "UCS",
         "ASTAR",
-        "SIMULATED_ANNEALING",
+        "LOCAL_BEAM",
         "AND_OR_SEARCH",
         "FORWARD_CHECKING",
         "ALPHA_BETA",

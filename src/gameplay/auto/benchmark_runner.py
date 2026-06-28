@@ -1,28 +1,27 @@
 from __future__ import annotations
 
-from src.ai.local_search.hill_climbing import hill_climbing
-from src.ai.local_search.local_beam import local_beam_search
-from src.ai.local_search.simulated_annealing import simulated_annealing
 from src.gameplay.auto.algorithm_groups import (
     get_algorithms_by_group,
     get_group_name,
 )
 from src.gameplay.auto.config import get_auto_map_config
+from src.gameplay.auto.complex_traps import build_trap_setup
 from src.gameplay.auto.models import AutoModeType, RunResult
+from src.gameplay.auto.delivery_search import delivery_search
 from src.gameplay.auto.order_factory import load_orders_for_map
+from src.gameplay.auto.maps.tmx_loader import load_auto_map
 from src.gameplay.auto.planner import build_plan_for_map
 from src.gameplay.auto.route_cost_matrix import build_route_cost_matrix
 from src.gameplay.auto.scoring import apply_benchmark_rank_bonus
-from src.ai.complex_search.and_or_graph import and_or_search
-from src.ai.complex_search.no_observation import no_observation_search
-from src.ai.complex_search.partial_observation import partial_observation_search
-from src.ai.complex_search.uncertainty_model import UncertaintyModel
-from src.ai.csp.ac3_backtracking import ac3_backtracking_search
-from src.ai.csp.backtracking import backtracking_search
-from src.ai.csp.forward_checking import forward_checking_search
-from src.ai.adversarial.alpha_beta import alpha_beta_search
-from src.ai.adversarial.expectimax import expectimax_search
-from src.ai.adversarial.minimax import minimax_search
+from src.ai.pathfinding.complex_search.and_or_graph import and_or_search
+from src.ai.pathfinding.complex_search.no_observation import no_observation_search
+from src.ai.pathfinding.complex_search.partial_observation import partial_observation_search
+from src.ai.pathfinding.csp.ac3_backtracking import ac3_backtracking_search
+from src.ai.pathfinding.csp.backtracking import backtracking_search
+from src.ai.pathfinding.csp.forward_checking import forward_checking_search
+from src.ai.pathfinding.adversarial.alpha_beta import alpha_beta_search
+from src.ai.pathfinding.adversarial.expectimax import expectimax_search
+from src.ai.pathfinding.adversarial.minimax import minimax_search
 
 def _estimate_score(
     completed_orders: int,
@@ -102,70 +101,26 @@ def run_local_search_benchmark_algorithm(
     group_id: int,
     algorithm: str,
 ) -> RunResult:
-    config = get_auto_map_config(map_id)
+    map_data = load_auto_map(map_id)
     orders = load_orders_for_map(map_id)
-    order_ids = [order.id for order in orders]
 
-    matrix = build_route_cost_matrix(
-        map_id=map_id,
-        algorithm="ASTAR",
+    result = delivery_search(
+        map_data=map_data,
+        orders=orders,
+        algorithm=algorithm,
     )
 
-    if algorithm == "HILL_CLIMBING":
-        result = hill_climbing(
-            order_ids=order_ids,
-            capacity=config.capacity,
-            cost_provider=matrix,
-            max_iterations=100,
-        )
-
-        total_cost = result.best_state.total_cost
-        expanded_nodes = result.expanded_nodes
-        runtime_ms = result.runtime_ms
-
-    elif algorithm == "LOCAL_BEAM":
-        result = local_beam_search(
-            order_ids=order_ids,
-            capacity=config.capacity,
-            cost_provider=matrix,
-            beam_width=5,
-            max_iterations=100,
-            seed=42,
-        )
-
-        total_cost = result.best_state.total_cost
-        expanded_nodes = result.expanded_nodes
-        runtime_ms = result.runtime_ms
-
-    elif algorithm == "SIMULATED_ANNEALING":
-        result = simulated_annealing(
-            order_ids=order_ids,
-            capacity=config.capacity,
-            cost_provider=matrix,
-            initial_temperature=120.0,
-            cooling_rate=0.985,
-            min_temperature=0.01,
-            max_iterations=1000,
-            seed=42,
-            restart_count=8,
-        )
-
-        total_cost = result.best_state.total_cost
-        expanded_nodes = result.expanded_nodes
-        runtime_ms = result.runtime_ms
-
-    else:
-        raise ValueError(f"Unsupported local search algorithm: {algorithm}")
+    completed_orders = sum(1 for action in result.actions if action.startswith("D_"))
 
     return _build_run_result(
         map_id=map_id,
         group_id=group_id,
         algorithm=algorithm,
-        completed_orders=6,
-        total_cost=total_cost,
-        expanded_nodes=expanded_nodes,
-        runtime_ms=runtime_ms,
-        success=True,
+        completed_orders=completed_orders,
+        total_cost=result.cost,
+        expanded_nodes=result.expanded_nodes,
+        runtime_ms=result.runtime_ms,
+        success=completed_orders == len(orders),
     )
 
 def run_complex_search_benchmark_algorithm(
@@ -177,36 +132,37 @@ def run_complex_search_benchmark_algorithm(
     orders = load_orders_for_map(map_id)
     order_ids = [order.id for order in orders]
 
-    matrix = build_route_cost_matrix(
-        map_id=map_id,
-        algorithm="ASTAR",
-    )
-
-    uncertainty_model = UncertaintyModel(matrix)
+    map_data = load_auto_map(map_id)
+    trap_setup = build_trap_setup(map_data, orders, algorithm)
+    max_traps = len(trap_setup.traps)
 
     if algorithm == "NO_OBSERVATION":
         result = no_observation_search(
             order_ids=order_ids,
+            possible_traps=trap_setup.possible_traps,
             capacity=config.capacity,
-            uncertainty_model=uncertainty_model,
+            max_traps=max_traps,
         )
 
     elif algorithm == "PARTIAL_OBSERVATION":
         result = partial_observation_search(
             order_ids=order_ids,
+            possible_traps=trap_setup.possible_traps,
+            known_traps=trap_setup.traps[:2],
             capacity=config.capacity,
-            uncertainty_model=uncertainty_model,
             max_iterations=100,
+            max_traps=max_traps,
         )
 
     elif algorithm == "AND_OR_SEARCH":
         result = and_or_search(
             order_ids=order_ids,
+            possible_traps=trap_setup.possible_traps,
             capacity=config.capacity,
-            uncertainty_model=uncertainty_model,
             beam_width=5,
             max_iterations=100,
             seed=42,
+            max_traps=max_traps,
         )
 
     else:

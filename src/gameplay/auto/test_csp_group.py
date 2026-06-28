@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from src.ai.csp.ac3_backtracking import ac3_backtracking_search
-from src.ai.csp.backtracking import backtracking_search
-from src.ai.csp.forward_checking import forward_checking_search
+from src.ai.pathfinding.csp.ac3_backtracking import ac3_backtracking_search
+from src.ai.pathfinding.csp.backtracking import backtracking_search
+from src.ai.pathfinding.csp.forward_checking import forward_checking_search
 from src.gameplay.auto.config import get_auto_map_config
 from src.gameplay.auto.order_factory import load_orders_for_map
 from src.gameplay.auto.route_cost_matrix import build_route_cost_matrix

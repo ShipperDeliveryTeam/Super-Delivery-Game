@@ -133,7 +133,7 @@ class HudMixin(LeftInformationCardMixin, LeftActiveDeliveryCardMixin, LeftOrderC
             )
 
         board_w = 560
-        row_h = 48
+        row_h = 68 if group_id in (4, 5) else 48
         plans = list(getattr(self, "auto_visual_plans", []))
         board_h = 62 + max(1, len(plans)) * row_h + 8
         board = pygame.Rect(SCREEN_WIDTH - board_w - 12, 116, board_w, board_h)
@@ -184,12 +184,48 @@ class HudMixin(LeftInformationCardMixin, LeftActiveDeliveryCardMixin, LeftOrderC
             pygame.draw.circle(self.screen, color, (board.x + 22, y + 13), 7)
             label = (
                 f"{index + 1}. {plan.algorithm}: "
-                f"cost={round(plan.total_cost, 1)} | expanded={plan.expanded_nodes} | {progress}"
+                f"cost={round(plan.total_cost, 1)} | "
+                f"expanded={plan.expanded_nodes} | "
+                f"time={plan.runtime_ms:.2f}ms | {progress}"
             )
             self._draw_text(label, self.font_tiny, (245, 245, 245), board.x + 40, y)
 
             note = plan.note or plan.group_name
             self._draw_text(note[:70], self.font_tiny, (180, 210, 235), board.x + 40, y + 19)
+
+            if group_id == 4:
+                belief_parts = []
+                max_show = 6 if plan.algorithm == "AND_OR_SEARCH" else 2
+                for belief_index, traps in enumerate(getattr(plan, "belief_states", ())[:max_show]):
+                    name = "Case" if plan.algorithm == "AND_OR_SEARCH" else "Kha nang"
+                    belief_parts.append(f"{name} {belief_index + 1}: {len(traps)} bay")
+                known_count = len(getattr(plan, "known_traps", ()))
+                if known_count:
+                    belief_parts.append(f"biet truoc: {known_count}")
+                if belief_parts:
+                    self._draw_text(
+                        " | ".join(belief_parts)[:76],
+                        self.font_tiny,
+                        (255, 215, 120),
+                        board.x + 40,
+                        y + 38,
+                    )
+
+            if group_id == 5:
+                order_sequence = []
+                for action in getattr(plan, "actions", ()):
+                    if action.startswith("P_"):
+                        order_sequence.append(action[2:])
+                if order_sequence:
+                    csp_line = "Thu tu: " + " -> ".join(order_sequence)
+                    self._draw_text(
+                        csp_line[:76],
+                        self.font_tiny,
+                        (255, 215, 120),
+                        board.x + 40,
+                        y + 38,
+                    )
+
             y += row_h
 
     def _draw_hud_clean(self) -> None:

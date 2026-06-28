@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import random
 from collections.abc import Sequence
 
 from src.gameplay.auto.config import get_auto_map_config
@@ -59,6 +60,12 @@ def build_orders_from_auto_map(map_data: AutoMapData) -> list[AutoOrder]:
     delivery_points = sorted(map_data.delivery_points, key=lambda item: item.id)
 
     order_count = min(config.order_count, len(pickup_points), len(delivery_points))
+
+    # Mỗi lần load map, 6 cửa hàng được ghép ngẫu nhiên với 6 nhà.
+    # Seed theo map_id để các thuật toán trong cùng một nhóm dùng chung môi trường.
+    rng = random.Random(map_data.map_id * 1000 + 2026)
+    delivery_points = list(delivery_points[:order_count])
+    rng.shuffle(delivery_points)
 
     orders: list[AutoOrder] = []
 

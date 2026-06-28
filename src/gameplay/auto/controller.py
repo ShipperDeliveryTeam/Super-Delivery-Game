@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import random
-
 from src.core.game_state import GameState
 from src.core.constants import NPC_COLORS, TILE_SIZE
 from src.entities.directional_shipper import DirectionalShipper
@@ -86,12 +85,21 @@ class AutoModeMixin:
         self.auto_visual_plans: list[AutoVisualAgentPlan] = plans
         self.auto_visual_path_index = {}
         self.auto_visual_completed = {}
+        self.auto_visual_targets = {}
+        self.auto_visual_hidden_traps = set()
+        self.auto_visual_revealed_traps = set()
+        self.auto_visual_trap_hits = set()
+        self.auto_visual_last_trap_pos = {}
+        self.auto_visual_trap_wait_until = {}
         self.auto_visual_started_at = getattr(self, "elapsed_time", 0.0)
 
         self.npc_shippers = []
         self.npc_paths = {}
         self.npc_tasks = {}
         self.npc_expanded = {}
+
+        for plan in plans:
+            self.auto_visual_hidden_traps.update(getattr(plan, "hidden_traps", ()))
 
         visual_colors = [
             (255, 80, 80),    # shipper 1 - đỏ
@@ -129,6 +137,8 @@ class AutoModeMixin:
             npc.auto_visual_index = index
             npc.auto_visual_color = visual_colors[index % len(visual_colors)]
             npc.auto_visual_offset = visual_offsets[index % len(visual_offsets)]
+            npc.auto_visual_alternative_paths = [list(item) for item in getattr(plan, "alternative_paths", ())]
+            npc.auto_visual_alternative_actions = [tuple(item) for item in getattr(plan, "alternative_actions", ())]
             npc.allow_diagonal = self._allow_diagonal_movement()
             npc.speed_px = 180.0
             npc.configure_roundabout(
@@ -140,8 +150,86 @@ class AutoModeMixin:
             self.npc_shippers.append(npc)
             self.npc_paths[npc.name] = list(plan.path[1:])
             self.npc_expanded[npc.name] = plan.expanded_nodes
+            self.auto_visual_targets[npc.name] = self._auto_visual_action_targets(plan.actions)
             self.auto_visual_path_index[npc.name] = 0
             self.auto_visual_completed[npc.name] = False
+
+    def _auto_visual_action_targets(self, actions: tuple[str, ...]) -> list[tuple[str, tuple[int, int]]]:
+        orders = {order.id: order for order in getattr(self, "auto_visual_orders", [])}
+        targets: list[tuple[str, tuple[int, int]]] = []
+
+        for action in actions:
+            if "_" not in action:
+                continue
+
+            kind, order_id = action.split("_", 1)
+            order = orders.get(order_id)
+            if order is None:
+                continue
+
+            if kind == "P":
+                targets.append(("store", order.store_pos))
+            elif kind == "D":
+                targets.append(("house", order.customer_pos))
+
+        return targets
+
+    def _advance_auto_visual_target(self, npc, base_pos: tuple[int, int]) -> None:
+        targets = getattr(self, "auto_visual_targets", {}).get(npc.name, [])
+
+        while targets and targets[0][1] == base_pos:
+            targets.pop(0)
+
+    def _and_or_replan_if_trap_ahead(
+        self,
+        npc,
+        base_pos: tuple[int, int],
+        next_pos: tuple[int, int],
+        path: list[tuple[int, int]],
+    ) -> bool:
+        if getattr(npc, "algorithm", "") != "AND_OR_SEARCH":
+            return False
+
+        hidden_traps = getattr(self, "auto_visual_hidden_traps", set())
+        if next_pos not in hidden_traps:
+            return False
+
+        revealed = getattr(self, "auto_visual_revealed_traps", set())
+        revealed.add(next_pos)
+        self.auto_visual_revealed_traps = revealed
+
+        blocked = set(revealed)
+        plans = getattr(npc, "auto_visual_alternative_paths", [])
+        current_targets = [target_pos for _, target_pos in self.auto_visual_targets.get(npc.name, [])]
+
+        for plan_path in plans:
+            for index, pos in enumerate(plan_path):
+                if pos != base_pos:
+                    continue
+
+                remain = list(plan_path[index + 1:])
+                if not remain:
+                    continue
+                if any(pos in blocked for pos in remain):
+                    continue
+
+                search_from = 0
+                valid_plan = True
+                for target_pos in current_targets:
+                    try:
+                        found_at = remain.index(target_pos, search_from)
+                    except ValueError:
+                        valid_plan = False
+                        break
+                    search_from = found_at + 1
+
+                if not valid_plan:
+                    continue
+
+                self.npc_paths[npc.name] = remain
+                return True
+
+        return False
 
     def _update_auto_visual_demo(self, dt: float) -> None:
         if not getattr(self, "auto_visual_plans", []):
@@ -153,6 +241,11 @@ class AutoModeMixin:
             if self.auto_visual_completed.get(npc.name, False):
                 continue
 
+            wait_until = self.auto_visual_trap_wait_until.get(npc.name, 0.0)
+            if wait_until > getattr(self, "elapsed_time", 0.0):
+                all_done = False
+                continue
+
             all_done = False
 
             if getattr(npc, "queued_grid_pos", None) is not None:
@@ -160,6 +253,10 @@ class AutoModeMixin:
 
             path = self.npc_paths.get(npc.name, [])
             base_pos = self._movement_base_pos(npc)
+            if self._check_auto_visual_hidden_trap(npc, base_pos):
+                all_done = False
+                continue
+            self._advance_auto_visual_target(npc, base_pos)
 
             while path and path[0] == base_pos:
                 path.pop(0)
@@ -168,6 +265,14 @@ class AutoModeMixin:
                 self.auto_visual_completed[npc.name] = True
                 npc.orders = 6
                 continue
+
+            next_pos = path[0]
+            if getattr(npc, "algorithm", "") == "AND_OR_SEARCH" and next_pos in getattr(self, "auto_visual_hidden_traps", set()):
+                if self._and_or_replan_if_trap_ahead(npc, base_pos, next_pos, path):
+                    all_done = False
+                    continue
+                # Neu khong co plan nao ne duoc bay nay thi cu di tiep,
+                # de phan xu ly bay giu 5 giay roi chay tiep binh thuong.
 
             next_pos = path[0]
             dx = next_pos[0] - base_pos[0]
@@ -181,6 +286,30 @@ class AutoModeMixin:
                 path.pop(0)
 
         self.auto_visual_finished = all_done
+
+    def _check_auto_visual_hidden_trap(self, npc, base_pos: tuple[int, int]) -> bool:
+        hidden_traps = getattr(self, "auto_visual_hidden_traps", set())
+        last_pos = getattr(self, "auto_visual_last_trap_pos", {})
+
+        if base_pos not in hidden_traps:
+            last_pos.pop(npc.name, None)
+            self.auto_visual_last_trap_pos = last_pos
+            return False
+
+        if last_pos.get(npc.name) == base_pos:
+            return False
+
+        last_pos[npc.name] = base_pos
+        self.auto_visual_last_trap_pos = last_pos
+
+        revealed = getattr(self, "auto_visual_revealed_traps", set())
+        revealed.add(base_pos)
+        self.auto_visual_revealed_traps = revealed
+
+        waits = getattr(self, "auto_visual_trap_wait_until", {})
+        waits[npc.name] = float(getattr(self, "elapsed_time", 0.0)) + 5.0
+        self.auto_visual_trap_wait_until = waits
+        return True
 
     def _draw_auto_visual_locations(self, bounce_offset: float) -> None:
         """Vẽ pickup/delivery của 6 đơn trong Auto TMX."""
@@ -204,6 +333,69 @@ class AutoModeMixin:
             pygame.draw.circle(self.screen, (80, 220, 120), (hcx, hcy), 9)
             pygame.draw.circle(self.screen, (20, 20, 20), (hcx, hcy), 9, 2)
             self._draw_text(order.id.replace("O", "D"), self.font_tiny_bold, (255, 255, 255), hcx, hcy - 8, center=True)
+
+        self._draw_auto_visual_hidden_traps(bounce_offset)
+        self._draw_auto_visual_current_targets(bounce_offset)
+
+    def _draw_auto_visual_hidden_traps(self, bounce_offset: float) -> None:
+        try:
+            import pygame
+        except Exception:
+            return
+
+        hidden_traps = getattr(self, "auto_visual_hidden_traps", set())
+        revealed = getattr(self, "auto_visual_revealed_traps", set())
+        cell_w, cell_h = self._cell_size_screen()
+        trap_icon = getattr(self, "icons", {}).get("trap")
+
+        for pos in hidden_traps:
+            sx, sy = self._grid_to_screen(pos)
+            cx = sx + cell_w // 2
+            cy = sy + cell_h // 2 - int(bounce_offset * 0.25)
+
+            if pos in revealed:
+                if trap_icon:
+                    rect = trap_icon.get_rect(center=(cx, cy))
+                    self.screen.blit(trap_icon, rect)
+                else:
+                    pygame.draw.circle(self.screen, (230, 55, 55), (cx, cy), 11)
+                    self._draw_text("!", self.font_tiny_bold, (255, 255, 255), cx, cy - 8, center=True)
+            else:
+                pygame.draw.circle(self.screen, (40, 80, 120), (cx, cy), 11)
+                pygame.draw.circle(self.screen, (255, 230, 90), (cx, cy), 11, 2)
+                self._draw_text("?", self.font_tiny_bold, (255, 255, 255), cx, cy - 8, center=True)
+
+    def _draw_auto_visual_current_targets(self, bounce_offset: float) -> None:
+        try:
+            import pygame
+        except Exception:
+            return
+
+        targets_by_name = getattr(self, "auto_visual_targets", {})
+        cell_w, cell_h = self._cell_size_screen()
+
+        for npc in getattr(self, "npc_shippers", []):
+            targets = targets_by_name.get(npc.name, [])
+            if not targets:
+                continue
+
+            target_kind, target_pos = targets[0]
+            sx, sy = self._grid_to_screen(target_pos)
+            cx = sx + cell_w // 2
+            cy = sy + cell_h // 2 - int(12 + bounce_offset * 0.5)
+
+            icon_key = f"location_npc{getattr(npc, 'auto_visual_index', 0) + 1}"
+            icon = getattr(self, "icons", {}).get(icon_key)
+            if icon:
+                rect = icon.get_rect(center=(cx, cy))
+                self.screen.blit(icon, rect)
+            else:
+                color = getattr(npc, "auto_visual_color", (255, 220, 80))
+                pygame.draw.circle(self.screen, color, (cx, cy), 12)
+                pygame.draw.circle(self.screen, (20, 20, 20), (cx, cy), 12, 2)
+
+            label = "S" if target_kind == "store" else "H"
+            self._draw_text(label, self.font_tiny_bold, (255, 255, 255), cx, cy - 8, center=True)
 
     def _handle_auto_visual_mouse_click(self, pos: tuple[int, int]) -> bool:
         """Xử lý click riêng trong Auto Visualizer."""

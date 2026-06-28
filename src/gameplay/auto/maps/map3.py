@@ -20,7 +20,7 @@ MAP3_PROFILE = AutoMapProfile(
     traffic_delay_seconds=3.0,
 
     allow_diagonal=True,
-    has_roundabout=False,
+    has_roundabout=True,
     has_hidden_block=True,
     has_random_traffic=True,
 

@@ -41,7 +41,7 @@ REPRESENTATIVES = [
     RepresentativeAlgorithm(
         group_id=3,
         group_name="Tìm kiếm cục bộ",
-        algorithm="SIMULATED_ANNEALING",
+        algorithm="LOCAL_BEAM",
         reason="Có khả năng thoát cực trị cục bộ nhờ chấp nhận nghiệm xấu có kiểm soát.",
     ),
     RepresentativeAlgorithm(
