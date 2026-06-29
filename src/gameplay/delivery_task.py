@@ -15,7 +15,9 @@ class DeliveryTask:
     order_id: str = ""
     created_at: float = 0.0
     expires_in: float = 180.0
+    delivery_time_limit: float = 90.0
     stolen_by: Optional[str] = None
+    lost: bool = False
     pickup_started_at: Optional[float] = None
     delivery_started_at: Optional[float] = None
 
@@ -26,6 +28,9 @@ class DeliveryTask:
         return self.store_pos
 
     def assign_to(self, shipper_name: str) -> bool:
+        if self.lost:
+            return False
+
         if self.holder_name is not None and self.holder_name != shipper_name:
             return False
 
@@ -33,7 +38,7 @@ class DeliveryTask:
         return True
 
     def try_pickup(self, shipper_name: str, pos: GridPos) -> bool:
-        if self.delivered:
+        if self.delivered or self.lost:
             return False
 
         if self.stolen_by and self.stolen_by != shipper_name:
@@ -49,7 +54,7 @@ class DeliveryTask:
         return False
 
     def try_deliver(self, shipper_name: str, pos: GridPos) -> bool:
-        if self.delivered:
+        if self.delivered or self.lost:
             return False
 
         if self.holder_name != shipper_name:

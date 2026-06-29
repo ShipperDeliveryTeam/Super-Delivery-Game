@@ -81,13 +81,7 @@ class GameRendererMixin:
                 center=True,
             )
 
-        # LEVEL box bên trái
-        level_x = 210
-        level_y = 305
-        self._draw_text("LEVEL", self.font_mid, (255, 255, 255), level_x + 80, level_y, center=True)
-        level_box = pygame.Rect(level_x + 28, level_y + 45, 120, 78)
-        self._draw_panel(level_box, alpha=185, border=True)
-        self._draw_text(f"{self.settings.selected_map_id:02d}", self.font_big, (255, 255, 255), level_box.centerx, level_box.centery - 4, center=True)
+        self._draw_algorithm_level_selector()
 
         # Map selector + preview
         self._draw_map_selector()
@@ -257,8 +251,24 @@ class GameRendererMixin:
             offset_x, offset_y = getattr(shipper, "auto_visual_offset", (0, 0))
             draw_x += offset_x
             draw_y += offset_y
+            color = getattr(shipper, "auto_visual_color", (255, 220, 80))
+            center = (draw_x + draw_w // 2, draw_y + draw_h - max(4, draw_h // 8))
+            pygame.draw.circle(self.screen, (20, 20, 24), center, max(12, draw_w // 2 + 5))
+            pygame.draw.circle(self.screen, color, center, max(10, draw_w // 2 + 2), width=4)
 
         self.screen.blit(sprite, (draw_x, draw_y))
+
+        if self.simulation_mode and getattr(self, "auto_visual_enabled", False):
+            color = getattr(shipper, "auto_visual_color", (255, 220, 80))
+            npc_index = int(getattr(shipper, "auto_visual_index", 0)) + 1
+            label = f"NPC {npc_index}"
+            text = self.font_tiny_bold.render(label, True, (255, 255, 255))
+            badge = pygame.Rect(0, 0, text.get_width() + 12, text.get_height() + 6)
+            badge.centerx = draw_x + draw_w // 2
+            badge.bottom = draw_y + 4
+            pygame.draw.rect(self.screen, (8, 22, 34), badge, border_radius=6)
+            pygame.draw.rect(self.screen, color, badge, width=2, border_radius=6)
+            self.screen.blit(text, (badge.x + 6, badge.y + 3))
 
     def _draw_matrix_overlay(self) -> None:
         cell_w, cell_h = self._cell_size_screen()
@@ -345,7 +355,11 @@ class GameRendererMixin:
 
             pygame.draw.lines(self.screen, color, False, points, width)
 
-        for point in anchor_points:
+        for index, point in enumerate(anchor_points):
+            if self.simulation_mode and getattr(self, "auto_visual_enabled", False):
+                if index not in (0, len(anchor_points) - 1) and index % 4 != 0:
+                    continue
+
             if glow:
                 pygame.draw.circle(self.screen, (20, 20, 24), point, radius + 3)
             pygame.draw.circle(self.screen, color, point, radius)

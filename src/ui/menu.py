@@ -177,6 +177,32 @@ class MenuMixin:
             return "MEDIUM"
         return "HARD"
 
+    def _draw_algorithm_level_selector(self) -> None:
+        group_id = int(getattr(self.settings, "selected_algorithm_group_id", 1))
+        level_x = 190
+        level_y = 292
+        self._draw_text("LEVEL", self.font_mid, (255, 255, 255), level_x + 105, level_y, center=True)
+
+        self.level_prev_button_rect = pygame.Rect(level_x, level_y + 50, 46, 54)
+        self.level_next_button_rect = pygame.Rect(level_x + 184, level_y + 50, 46, 54)
+        level_box = pygame.Rect(level_x + 58, level_y + 40, 114, 76)
+
+        self._draw_image_button(getattr(self, "ui_left_button", None), self.level_prev_button_rect, "<", (65, 180, 85))
+        self._draw_image_button(getattr(self, "ui_right_button", None), self.level_next_button_rect, ">", (65, 180, 85))
+        self._draw_panel(level_box, alpha=185, border=True)
+        self._draw_text(str(group_id), self.font_big, (255, 255, 255), level_box.centerx, level_box.y + 35, center=True)
+
+    def _change_algorithm_group(self, delta: int) -> None:
+        group_id = int(getattr(self.settings, "selected_algorithm_group_id", 1)) + int(delta)
+
+        if group_id < 1:
+            group_id = 6
+        elif group_id > 6:
+            group_id = 1
+
+        self.settings.set_algorithm_group(group_id)
+        self.auto_visual_group_id = group_id
+
     def _change_menu_map(self, delta: int) -> None:
         new_map = self.settings.selected_map_id + delta
 
@@ -272,6 +298,14 @@ class MenuMixin:
 
         if hasattr(self, "map_next_button_rect") and self.map_next_button_rect and self.map_next_button_rect.collidepoint(pos):
             self._change_menu_map(1)
+            return
+
+        if hasattr(self, "level_prev_button_rect") and self.level_prev_button_rect and self.level_prev_button_rect.collidepoint(pos):
+            self._change_algorithm_group(-1)
+            return
+
+        if hasattr(self, "level_next_button_rect") and self.level_next_button_rect and self.level_next_button_rect.collidepoint(pos):
+            self._change_algorithm_group(1)
             return
 
         if self.menu_panel_open:

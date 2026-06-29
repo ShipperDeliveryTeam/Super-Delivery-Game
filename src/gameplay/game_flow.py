@@ -79,6 +79,8 @@ class GameFlowMixin:
         self.delivered_house_numbers = []
         self._next_player_order_id = 0
         self.order_scroll_offset = 0
+        self.last_delivery_timeout_message = ""
+        self.delivery_timeout_notice_until = 0.0
 
         self._create_shipper_objects()
 

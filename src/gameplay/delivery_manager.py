@@ -33,6 +33,13 @@ from src.entities.directional_shipper import DirectionalShipper
 class DeliveryManagerMixin:
     PLAYER_OFFER_COUNT = 5
     PLAYER_CARGO_LIMIT = 3
+    PLAYER_DELIVERY_BASE_SECONDS = 30.0
+    PLAYER_DELIVERY_SECONDS_PER_STEP = 1.2
+    PLAYER_MIN_DELIVERY_TIME_LIMIT = 45.0
+    PLAYER_MAX_DELIVERY_TIME_LIMIT = 150.0
+    PLAYER_LATE_DELIVERY_PENALTY_RATIO = 0.25
+    PLAYER_MIN_LATE_DELIVERY_PENALTY = 20
+    PLAYER_MAX_LATE_DELIVERY_PENALTY = 120
 
     def _new_task(self, holder_name: Optional[str] = None) -> DeliveryTask:
         fallback_task = None
@@ -104,7 +111,89 @@ class DeliveryManagerMixin:
         task.order_id = f"A{self._next_player_order_id:02d}"
         task.created_at = float(getattr(self, "elapsed_time", 0.0))
         task.expires_in = 150.0 + (self._next_player_order_id % 3) * 30.0
+        task.delivery_time_limit = self._delivery_time_limit_for_task(task)
+        task.delivery_started_at = None
+        task.lost = False
         return task
+
+    def _delivery_time_limit_for_task(self, task: DeliveryTask) -> float:
+        result = self.pathfinder.find_path(task.store_pos, task.house_pos, "ASTAR")
+        steps = len(result.path) - 1 if result.success and result.path else 50
+        limit = self.PLAYER_DELIVERY_BASE_SECONDS + steps * self.PLAYER_DELIVERY_SECONDS_PER_STEP
+        return max(
+            self.PLAYER_MIN_DELIVERY_TIME_LIMIT,
+            min(self.PLAYER_MAX_DELIVERY_TIME_LIMIT, float(limit)),
+        )
+
+    def _format_seconds(self, seconds: float | int) -> str:
+        remaining = max(0, int(seconds))
+        return f"{remaining // 60:02d}:{remaining % 60:02d}"
+
+    def _delivery_remaining_seconds(self, task: DeliveryTask, now: float | None = None) -> float | None:
+        if not getattr(task, "picked_up", False) or getattr(task, "delivered", False) or getattr(task, "lost", False):
+            return None
+
+        started_at = getattr(task, "delivery_started_at", None)
+        if started_at is None:
+            return float(getattr(task, "delivery_time_limit", 0.0))
+
+        current_time = float(getattr(self, "elapsed_time", 0.0) if now is None else now)
+        return float(getattr(task, "delivery_time_limit", 0.0)) - (current_time - float(started_at))
+
+    def _delivery_display_seconds(self, task: DeliveryTask, now: float | None = None) -> float:
+        remaining = self._delivery_remaining_seconds(task, now)
+        if remaining is not None:
+            return remaining
+
+        return float(getattr(task, "delivery_time_limit", 0.0))
+
+    def _late_delivery_penalty(self, task: DeliveryTask) -> int:
+        penalty = round(int(getattr(task, "reward", 0)) * self.PLAYER_LATE_DELIVERY_PENALTY_RATIO)
+        return max(
+            self.PLAYER_MIN_LATE_DELIVERY_PENALTY,
+            min(self.PLAYER_MAX_LATE_DELIVERY_PENALTY, int(penalty)),
+        )
+
+    def _expire_player_delivery(self, task: DeliveryTask) -> int:
+        penalty = self._late_delivery_penalty(task)
+        was_active_task = self.player_task is task
+        offers_before = list(getattr(self, "available_player_tasks", []))
+        selected_index = int(getattr(self, "selected_player_order_index", -1))
+        selected_task = offers_before[selected_index] if 0 <= selected_index < len(offers_before) else None
+
+        if self.player:
+            self.player.money = max(0, int(self.player.money) - penalty)
+
+        task.lost = True
+        task.holder_name = None
+        self.available_player_tasks = [
+            offer for offer in offers_before
+            if offer is not task
+        ]
+        self._drop_player_task(task)
+        if selected_task is task or self.selected_player_order_index >= len(self.available_player_tasks):
+            self.selected_player_order_index = (
+                self.available_player_tasks.index(self.player_task)
+                if self.player_task in self.available_player_tasks
+                else -1
+            )
+
+        if was_active_task and self.delivery_confirmation_open:
+            self.delivery_confirmation_open = False
+            self.delivery_checkbox_checked = False
+
+        self.last_delivery_timeout_message = f"QUA GIO! Mat don #{task.order_id}, tru {penalty} xu"
+        self.delivery_timeout_notice_until = float(getattr(self, "elapsed_time", 0.0)) + 3.0
+        self._replenish_player_order_offers()
+        self._refresh_player_path_hint()
+        return penalty
+
+    def _update_player_delivery_timeouts(self) -> None:
+        now = float(getattr(self, "elapsed_time", 0.0))
+        for task in list(getattr(self, "player_tasks", [])):
+            remaining = self._delivery_remaining_seconds(task, now)
+            if remaining is not None and remaining <= 0:
+                self._expire_player_delivery(task)
 
     def _random_player_offer_for_unused_store(self, used_stores: set[Tuple[int, int]]) -> DeliveryTask | None:
         stores = [store for store in getattr(self, "store_positions", []) if store not in used_stores]
@@ -172,7 +261,7 @@ class DeliveryManagerMixin:
 
         task = offers[index]
 
-        if getattr(task, "stolen_by", None):
+        if getattr(task, "stolen_by", None) or getattr(task, "lost", False):
             return False
 
         player_tasks = list(getattr(self, "player_tasks", []))
@@ -233,6 +322,11 @@ class DeliveryManagerMixin:
             or not getattr(self, "delivery_checkbox_checked", False)
             or self.player.grid_pos != task.house_pos
         ):
+            return False
+
+        remaining = self._delivery_remaining_seconds(task)
+        if remaining is not None and remaining <= 0:
+            self._expire_player_delivery(task)
             return False
 
         if not task.try_deliver("Player", self.player.grid_pos):

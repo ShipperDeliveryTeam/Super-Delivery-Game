@@ -96,6 +96,9 @@ class GameManager(
         self.ui_play_button = None
         self.ui_sound_on = None
         self.ui_sound_off = None
+        self.ui_pause_button = None
+        self.ui_left_button = None
+        self.ui_right_button = None
         self.ui_menu_button = None
 
         self.simulation_button_rect = None

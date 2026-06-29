@@ -6,6 +6,7 @@ os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 
 import game  # Adds the optional project-local dependency directory to sys.path.
+# pyrefly: ignore [missing-import]
 import pygame
 
 from src.core.game_manager import GameManager
@@ -107,6 +108,50 @@ class GameSmokeTests(unittest.TestCase):
         manager._handle_player_task_at_current_pos()
         self.assertTrue(second.picked_up)
         self.assertIs(manager.player_task, second)
+
+    def test_player_loses_carried_order_and_coins_when_delivery_timer_expires(self):
+        manager = GameManager(GameSettings(), debug=True)
+        manager._start_play_mode()
+
+        manager.player.money = 100
+        self.assertTrue(manager._select_player_order(0))
+        task = manager.player_tasks[0]
+        task.reward = 200
+        task.delivery_time_limit = 5.0
+
+        manager.player.set_grid_pos(task.store_pos)
+        manager._handle_player_task_at_current_pos()
+        self.assertTrue(task.picked_up)
+        self.assertIsNotNone(task.delivery_started_at)
+
+        manager.elapsed_time = task.delivery_started_at + 5.1
+        manager._update_player_delivery_timeouts()
+
+        self.assertTrue(task.lost)
+        self.assertNotIn(task, manager.player_tasks)
+        self.assertNotIn(task, manager.available_player_tasks)
+        self.assertEqual(manager.player.money, 50)
+        self.assertEqual(len(manager.available_player_tasks), 5)
+
+    def test_delivery_timer_stays_fixed_until_pickup_then_counts_down(self):
+        manager = GameManager(GameSettings(), debug=True)
+        manager._start_play_mode()
+
+        self.assertTrue(manager._select_player_order(0))
+        task = manager.player_tasks[0]
+        task.delivery_time_limit = 125.0
+
+        start_display = manager._delivery_display_seconds(task)
+        manager.elapsed_time += 30.0
+        self.assertEqual(manager._delivery_display_seconds(task), start_display)
+
+        manager.player.set_grid_pos(task.store_pos)
+        manager._handle_player_task_at_current_pos()
+        self.assertTrue(task.picked_up)
+        self.assertEqual(manager._delivery_display_seconds(task), start_display)
+
+        manager.elapsed_time += 25.0
+        self.assertEqual(manager._delivery_display_seconds(task), start_display - 25.0)
 
     def test_player_wins_at_target_revenue_without_changing_map(self):
         settings = GameSettings()

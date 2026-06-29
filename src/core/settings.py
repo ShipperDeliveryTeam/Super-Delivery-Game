@@ -30,6 +30,7 @@ class GameSettings:
 
     selected_map_id: int = DEFAULT_MAP_ID
     selected_algorithm: str = DEFAULT_ALGORITHM
+    selected_algorithm_group_id: int = 1
 
     sound_enabled: bool = True
     show_grid: bool = False
@@ -50,6 +51,15 @@ class GameSettings:
 
         if 1 <= map_id <= 3:
             self.selected_map_id = map_id
+
+    def set_algorithm_group(self, group_id: int) -> None:
+        try:
+            group_id = int(group_id)
+        except Exception:
+            return
+
+        if 1 <= group_id <= 6:
+            self.selected_algorithm_group_id = group_id
 
     def set_algorithm(self, algorithm: str) -> None:
         algorithm = str(algorithm or "").upper()

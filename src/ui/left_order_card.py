@@ -77,12 +77,12 @@ class LeftOrderCardMixin:
 
         return None
 
-    def _blit_cover(self, image, rect: pygame.Rect) -> None:
+    def _blit_cover(self, image, rect: pygame.Rect, zoom: float = 1.0) -> None:
         if image is None or rect.width <= 0 or rect.height <= 0:
             return
 
         iw, ih = image.get_size()
-        scale = max(rect.width / max(1, iw), rect.height / max(1, ih))
+        scale = max(rect.width / max(1, iw), rect.height / max(1, ih)) * max(1.0, float(zoom))
         size = (max(1, int(iw * scale)), max(1, int(ih * scale)))
         scaled = pygame.transform.smoothscale(image, size)
         crop = pygame.Rect(0, 0, rect.width, rect.height)
@@ -170,6 +170,12 @@ class LeftOrderCardMixin:
                 int(rect.width * 0.30),
                 int(rect.height * 0.25),
             )
+            time_rect = pygame.Rect(
+                rect.x + int(rect.width * 0.65) - 10,
+                rect.y + int(rect.height * 0.33) - 2,
+                int(rect.width * 0.30),
+                int(rect.height * 0.20),
+            )
             house_rect = pygame.Rect(
                 rect.x + int(rect.width * 0.65) - 10,
                 rect.y + int(rect.height * 0.45) + 5,
@@ -186,14 +192,22 @@ class LeftOrderCardMixin:
             image = self._shop_card_image(task)
             if image:
                 image_rect = pygame.Rect(
-                    rect.x + int(rect.width * 0.02),
-                    rect.y + int(rect.height * 0.04),
-                    int(rect.width * 0.50),
-                    int(rect.height * 0.91),
+                    rect.x + int(rect.width * 0.01),
+                    rect.y + int(rect.height * 0.01),
+                    int(rect.width * 0.54),
+                    int(rect.height * 0.97),
                 )
-                self._blit_cover(image, image_rect)
+                self._blit_cover(image, image_rect, zoom=1.16)
 
             self._draw_fitted_text(f"{task.reward} xu", font, dark_gold, reward_rect, center=True)
+            remaining = self._delivery_display_seconds(task)
+            time_text = self._format_seconds(remaining)
+            time_color = (
+                (184, 42, 32)
+                if getattr(task, "picked_up", False) and remaining <= 15
+                else dark_gold
+            )
+            self._draw_fitted_text(time_text, font, time_color, time_rect, center=True)
             self._draw_fitted_text(f"Nha {house:02d}", font, dark_gold, house_rect, center=True)
             if getattr(task, "stolen_by", None):
                 button_key = "rob"
@@ -290,13 +304,18 @@ class LeftOrderCardMixin:
 
         name = self._store_display_name(task.store_pos)[:18]
         house = self._house_number(task.house_pos)
-        remaining = max(0, int(task.expires_in - (self.elapsed_time - task.created_at)))
-        time_text = f"{remaining // 60:02d}:{remaining % 60:02d}"
+        remaining = self._delivery_display_seconds(task)
+        time_text = self._format_seconds(remaining)
         text_x = rect.x + 88
         text_color = (18, 52, 77) if not locked else (62, 70, 76)
         self._draw_text(name, self.font_small, text_color, text_x, rect.y + 14)
         self._draw_text(f"{task.reward} xu", self.font_tiny, (146, 91, 15), text_x, rect.y + 45)
-        self._draw_text(time_text, self.font_tiny, text_color, text_x + 92, rect.y + 45)
+        time_color = (
+            (184, 42, 32)
+            if getattr(task, "picked_up", False) and remaining <= 15
+            else text_color
+        )
+        self._draw_text(time_text, self.font_tiny, time_color, text_x + 92, rect.y + 45)
         self._draw_text(f"Nha {house:02d}", self.font_tiny, text_color, text_x, rect.y + 70)
 
         button = pygame.Rect(text_x, rect.bottom - 43, 126, 32)

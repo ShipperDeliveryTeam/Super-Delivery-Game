@@ -32,12 +32,20 @@ class LeftActiveDeliveryCardMixin:
 
         house = self._house_number(preview.house_pos)
         status = "TOI NHA" if getattr(preview, "picked_up", False) else "LAY HANG"
+        remaining = self._delivery_display_seconds(preview)
+        time_text = self._format_seconds(remaining)
+        time_color = (
+            (220, 55, 40)
+            if getattr(preview, "picked_up", False) and remaining <= 15
+            else (255, 213, 74)
+        )
 
         if has_asset:
             gold = (255, 213, 74)
             font = getattr(self, "font_small_bold", getattr(self, "font_mid", None))
             house_val_rect = pygame.Rect(rect.x + int(rect.width * 0.49) - 20, rect.y + int(rect.height * 0.22) - 5, int(rect.width * 0.45), int(rect.height * 0.26))
-            coin_val_rect = pygame.Rect(rect.x + int(rect.width * 0.49) - 20, rect.y + int(rect.height * 0.47) - 5, int(rect.width * 0.45), int(rect.height * 0.26))
+            time_val_rect = pygame.Rect(rect.x + int(rect.width * 0.49) - 20, rect.y + int(rect.height * 0.42) - 5, int(rect.width * 0.45), int(rect.height * 0.22))
+            coin_val_rect = pygame.Rect(rect.x + int(rect.width * 0.49) - 20, rect.y + int(rect.height * 0.55) - 5, int(rect.width * 0.45), int(rect.height * 0.22))
             self._delivery_action_rect = pygame.Rect(
                 rect.x + int(rect.width * 0.06),
                 rect.y + int(rect.height * 0.73),
@@ -45,10 +53,12 @@ class LeftActiveDeliveryCardMixin:
                 int(rect.height * 0.20),
             )
             self._draw_fitted_text(f"Nha {house:02d}", font, gold, house_val_rect, center=True)
+            self._draw_fitted_text(time_text, font, time_color, time_val_rect, center=True)
             self._draw_fitted_text(f"{preview.reward} xu", font, gold, coin_val_rect, center=True)
             return
 
         self._draw_status_row(rect.x + 14, rect.y + 44, "SHOP", self._store_display_name(preview.store_pos))
+        self._draw_status_row(rect.x + 160, rect.y + 44, "TG", time_text)
         self._draw_status_row(rect.x + 14, rect.y + 70, "NHA", f"{house:02d}")
         self._draw_status_row(rect.x + 160, rect.y + 70, "XU", str(preview.reward))
 
@@ -75,9 +85,12 @@ class LeftActiveDeliveryCardMixin:
         if preview:
             house = self._house_number(preview.house_pos)
             status = "TOI NHA" if getattr(preview, "picked_up", False) else "LAY HANG"
+            remaining = self._delivery_display_seconds(preview)
+            time_text = self._format_seconds(remaining)
             self._draw_status_row(card.x + 13, card.y + 52, "SHOP", self._store_display_name(preview.store_pos))
+            self._draw_status_row(card.x + 160, card.y + 52, "TG", time_text)
             self._draw_status_row(card.x + 13, card.y + 84, "NHA", f"{house:02d}")
-            self._draw_status_row(card.x + 13, card.y + 116, "XU", str(preview.reward))
+            self._draw_status_row(card.x + 160, card.y + 84, "XU", str(preview.reward))
 
             status_box = pygame.Rect(card.x + 12, card.bottom - 42, card.width - 24, 28)
             pygame.draw.rect(self.screen, (40, 153, 69), status_box, border_radius=8)
@@ -152,8 +165,8 @@ class LeftActiveDeliveryCardMixin:
         checked = getattr(self, "delivery_checkbox_checked", False)
 
         if has_asset:
-            order_value = pygame.Rect(panel.x + int(panel.width * 0.48), panel.y + int(panel.height * 0.345), int(panel.width * 0.34), 28)
-            house_value = pygame.Rect(panel.x + int(panel.width * 0.48), panel.y + int(panel.height * 0.535), int(panel.width * 0.34), 28)
+            order_value = pygame.Rect(panel.x + int(panel.width * 0.4), panel.y + int(panel.height * 0.38), int(panel.width * 0.34), 28)
+            house_value = pygame.Rect(panel.x + int(panel.width * 0.4), panel.y + int(panel.height * 0.55), int(panel.width * 0.34), 28)
             self._draw_fitted_text(f"#{task.order_id}", self.font_mid, (55, 39, 23), order_value, center=True)
             self._draw_fitted_text(f"Nha {house:02d}", self.font_mid, (55, 39, 23), house_value, center=True)
 

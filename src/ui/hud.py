@@ -65,8 +65,8 @@ class HudMixin(LeftInformationCardMixin, LeftActiveDeliveryCardMixin, LeftOrderC
     def _draw_auto_visual_hud(self) -> None:
         from src.gameplay.auto.algorithm_groups import get_group_name
 
-        top_bar = pygame.Rect(0, 0, SCREEN_WIDTH, 40)
-        self._draw_panel(top_bar, alpha=125, border=False)
+        top_bar = pygame.Rect(0, 0, SCREEN_WIDTH, 30)
+        self._draw_panel(top_bar, alpha=110, border=False)
 
         group_id = int(getattr(self, "auto_visual_group_id", 1))
         group_name = get_group_name(group_id)
@@ -76,15 +76,15 @@ class HudMixin(LeftInformationCardMixin, LeftActiveDeliveryCardMixin, LeftOrderC
             status = "ERROR"
 
         text = (
-            f"AUTO-MODE VISUAL | Map {self.settings.selected_map_id} | "
-            f"Group {group_id}: {group_name} | 3 algorithms | {status} | ESC Pause | P Path | G Grid"
+            f"AUTO MODE | LEVEL G{group_id} | MAP {self.settings.selected_map_id:02d} | "
+            f"{status} | ESC Pause | P Path | G Grid"
         )
-        self._draw_text(text, self.font_tiny, (255, 255, 255), 12, 11)
+        self._draw_text(text, self.font_tiny, (255, 255, 255), 12, 7)
 
         # Group select buttons. Click G1..G6 to restart visual demo for that group.
         # Vẽ thành panel lớn, rõ chữ, không bị lẫn vào nền map.
         self.auto_visual_group_button_rects = {}
-        selector_panel = pygame.Rect(12, 48, 760, 62)
+        selector_panel = pygame.Rect(-2000, -2000, 1, 1)
         self._draw_panel(selector_panel, alpha=185, border=True)
         self._draw_text(
             "CHỌN NHÓM:",
@@ -132,15 +132,54 @@ class HudMixin(LeftInformationCardMixin, LeftActiveDeliveryCardMixin, LeftOrderC
                 center=True,
             )
 
-        board_w = 560
-        row_h = 68 if group_id in (4, 5) else 48
         plans = list(getattr(self, "auto_visual_plans", []))
+        colors = [
+            (255, 80, 80),
+            (60, 235, 125),
+            (255, 180, 55),
+        ]
+        shippers_by_algorithm = {
+            getattr(npc, "algorithm", ""): npc
+            for npc in getattr(self, "npc_shippers", [])
+        }
+
+        side = pygame.Rect(14, 44, 328, 290)
+        self._draw_game_panel(side, (6, 18, 34), (229, 168, 58), 232)
+        self._draw_fitted_text("AUTO VISUAL", self.font_small_bold, (255, 224, 91), pygame.Rect(side.x + 16, side.y + 14, side.width - 32, 24), center=True)
+        self._draw_fitted_text(f"LEVEL G{group_id}", self.font_mid, (255, 255, 255), pygame.Rect(side.x + 18, side.y + 48, 130, 34), center=True)
+        self._draw_fitted_text(group_name, self.font_tiny_bold, (218, 238, 250), pygame.Rect(side.x + 152, side.y + 54, side.width - 170, 24), center=True)
+
+        minutes = int(getattr(self, "elapsed_time", 0.0)) // 60
+        seconds = int(getattr(self, "elapsed_time", 0.0)) % 60
+        chips = [
+            ("MAP", f"{self.settings.selected_map_id:02d}", (75, 166, 237)),
+            ("TIME", f"{minutes:02d}:{seconds:02d}", (255, 180, 55)),
+            ("NPC", "03", (60, 235, 125)),
+        ]
+        for index, (label, value, accent) in enumerate(chips):
+            chip = pygame.Rect(side.x + 18 + index * 98, side.y + 92, 86, 54)
+            self._draw_dashboard_chip(chip, label, value, accent)
+
+        self._draw_fitted_text("3 NPC - 3 thuat toan", self.font_tiny_bold, (255, 224, 91), pygame.Rect(side.x + 18, side.y + 160, side.width - 36, 22), center=True)
+        legend_y = side.y + 190
+        for index, plan in enumerate(plans[:3]):
+            npc = shippers_by_algorithm.get(plan.algorithm)
+            color = getattr(npc, "auto_visual_color", colors[index % len(colors)]) if npc else colors[index % len(colors)]
+            row = pygame.Rect(side.x + 18, legend_y + index * 30, side.width - 36, 24)
+            pygame.draw.rect(self.screen, (8, 35, 55, 185), row, border_radius=7)
+            pygame.draw.circle(self.screen, color, (row.x + 14, row.centery), 7)
+            pygame.draw.circle(self.screen, (255, 255, 255), (row.x + 14, row.centery), 7, 1)
+            self._draw_fitted_text(f"NPC {index + 1}", self.font_tiny_bold, color, pygame.Rect(row.x + 30, row.y + 2, 54, 20))
+            self._draw_fitted_text(plan.algorithm, self.font_tiny, (235, 245, 255), pygame.Rect(row.x + 86, row.y + 2, row.width - 92, 20))
+
+        board_w = 460
+        row_h = 68 if group_id in (4, 5) else 48
         board_h = 62 + max(1, len(plans)) * row_h + 8
-        board = pygame.Rect(SCREEN_WIDTH - board_w - 12, 116, board_w, board_h)
+        board = pygame.Rect(SCREEN_WIDTH - board_w - 16, 54, board_w, board_h)
         self._draw_panel(board, alpha=150, border=True)
 
         self._draw_text(
-            f"GROUP {group_id}: {group_name}",
+            f"LEVEL G{group_id}: {group_name}",
             self.font_small,
             (255, 230, 110),
             board.x + 16,
@@ -153,22 +192,20 @@ class HudMixin(LeftInformationCardMixin, LeftActiveDeliveryCardMixin, LeftOrderC
             board.x + 16,
             board.y + 36,
         )
+        pygame.draw.rect(self.screen, (10, 14, 22), pygame.Rect(board.x + 12, board.y + 32, board.width - 24, 22))
+        self._draw_text(
+            "Chon level o man hinh chinh - moi level chay 3 NPC",
+            self.font_tiny,
+            (185, 220, 245),
+            board.x + 16,
+            board.y + 36,
+        )
 
         if error:
             self._draw_text(error[:70], self.font_tiny, (255, 120, 120), board.x + 16, board.y + 60)
             return
 
-        colors = [
-            (255, 80, 80),
-            (60, 235, 125),
-            (255, 180, 55),
-        ]
-
         y = board.y + 64
-        shippers_by_algorithm = {
-            getattr(npc, "algorithm", ""): npc
-            for npc in getattr(self, "npc_shippers", [])
-        }
 
         for index, plan in enumerate(plans):
             npc = shippers_by_algorithm.get(plan.algorithm)
@@ -248,8 +285,9 @@ class HudMixin(LeftInformationCardMixin, LeftActiveDeliveryCardMixin, LeftOrderC
     def _draw_delivery_dashboard(self) -> None:
         self._game_sound_rect = pygame.Rect(SCREEN_WIDTH - 150, 14, 58, 58)
         self._game_pause_rect = pygame.Rect(SCREEN_WIDTH - 80, 14, 58, 58)
-        self._draw_round_game_button(self._game_sound_rect, "♪" if getattr(self.settings, 'sound_enabled', True) else "×")
-        self._draw_round_game_button(self._game_pause_rect, "PAUSE")
+        sound_img = self.ui_sound_on if getattr(self.settings, "sound_enabled", True) else self.ui_sound_off
+        self._draw_round_game_button(self._game_sound_rect, "ON", sound_img)
+        self._draw_round_game_button(self._game_pause_rect, "PAUSE", getattr(self, "ui_pause_button", None))
 
         if self._has_letterbox_side_rails():
             self._order_card_rects = []
@@ -259,6 +297,7 @@ class HudMixin(LeftInformationCardMixin, LeftActiveDeliveryCardMixin, LeftOrderC
 
         panel = pygame.Rect(14, 14, 340, SCREEN_HEIGHT - 28)
         self._draw_left_side_panel(panel)
+        self._draw_delivery_timeout_notice()
 
         if getattr(self, "delivery_confirmation_open", False):
             self._draw_delivery_confirmation()
@@ -290,6 +329,18 @@ class HudMixin(LeftInformationCardMixin, LeftActiveDeliveryCardMixin, LeftOrderC
         # 4. Don hang header, list, scroll, and cargo slots
         orders_panel = pygame.Rect(panel.x + 2, status_rect.bottom + 2, panel.width - 4, panel.bottom - status_rect.bottom - 6)
         self._draw_left_orders_card(orders_panel)
+
+    def _draw_delivery_timeout_notice(self) -> None:
+        if float(getattr(self, "delivery_timeout_notice_until", 0.0)) <= float(getattr(self, "elapsed_time", 0.0)):
+            return
+
+        message = str(getattr(self, "last_delivery_timeout_message", ""))
+        if not message:
+            return
+
+        rect = pygame.Rect(SCREEN_WIDTH // 2 - 210, 86, 420, 48)
+        self._draw_game_panel(rect, (118, 37, 34), (255, 198, 82), 246)
+        self._draw_fitted_text(message, self.font_small_bold, (255, 245, 218), rect.inflate(-24, -12), center=True)
 
     def _draw_trimmed_ui_asset(self, image, rect: pygame.Rect) -> bool:
         if image is None or rect.width <= 0 or rect.height <= 0:
@@ -390,8 +441,18 @@ class HudMixin(LeftInformationCardMixin, LeftActiveDeliveryCardMixin, LeftOrderC
         self._draw_text(label, self.font_tiny, (194, 215, 232), rect.x + 64, rect.y + 10)
         self._draw_text(value, self.font_mid, (255, 255, 255), rect.x + 64, rect.y + 30)
 
-    def _draw_round_game_button(self, rect: pygame.Rect, label: str) -> None:
+    def _draw_round_game_button(self, rect: pygame.Rect, label: str, image=None) -> None:
         hovered = rect.collidepoint(self._world_mouse_pos())
+
+        draw_rect = rect.copy()
+        if hovered:
+            draw_rect.inflate_ip(5, 5)
+
+        if image:
+            scaled = pygame.transform.smoothscale(image, draw_rect.size)
+            self.screen.blit(scaled, draw_rect)
+            return
+
         pygame.draw.circle(self.screen, (236, 180, 61), rect.center, rect.width // 2)
         pygame.draw.circle(self.screen, (15, 66, 105) if not hovered else (27, 94, 143), rect.center, rect.width // 2 - 5)
         if label == "PAUSE":

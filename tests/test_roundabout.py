@@ -5,9 +5,12 @@ import os
 os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 
+# pyrefly: ignore [missing-import]
 import pygame
 from src.ai.game_pathfinder import GamePathfinder
+from src.core.settings import GameSettings
 from src.gameplay.roundabout_geometry import build_roundabout_curve, curve_point
+from src.maps.map_manager import MapManagerMixin
 from src.maps.tmx_loader import TmxMapLoader
 
 
@@ -85,6 +88,41 @@ class RoundaboutPathfinderTests(unittest.TestCase):
 
         self.assertFalse(set(RING) & blocked)
         self.assertFalse({point for edge in CONNECTIONS for point in edge} & blocked)
+
+
+class MapDiagonalMovementTests(unittest.TestCase):
+    def test_map2_and_map3_enable_diagonal_movement(self):
+        manager = MapManagerMixin()
+        manager.settings = GameSettings()
+
+        expected = {
+            1: False,
+            2: True,
+            3: True,
+        }
+
+        for map_id, allow_diagonal in expected.items():
+            with self.subTest(map_id=map_id):
+                manager.settings.selected_map_id = map_id
+                self.assertEqual(manager._allow_diagonal_movement(), allow_diagonal)
+
+    def test_map3_diagonal_road_edges_are_walkable(self):
+        pygame.init()
+        pygame.display.set_mode((1, 1))
+        self.addCleanup(pygame.quit)
+
+        map_path = Path(__file__).resolve().parents[1] / "maps" / "map3" / "map3.tmx"
+        data = TmxMapLoader().load(map_path)
+        blocked = TmxMapLoader().blocked_positions(data.grid)
+        pathfinder = GamePathfinder(data.width, data.height, blocked, allow_diagonal=True)
+
+        for start, end in (
+            ((19, 5), (20, 6)),
+            ((20, 6), (21, 7)),
+            ((21, 7), (22, 8)),
+        ):
+            with self.subTest(start=start, end=end):
+                self.assertTrue(pathfinder.can_step(start, end))
 
 
 if __name__ == "__main__":

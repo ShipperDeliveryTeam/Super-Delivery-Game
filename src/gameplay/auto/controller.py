@@ -40,8 +40,7 @@ class AutoModeMixin:
         self._reset_game()
         self.auto_player_enabled = False
         self.player_path_hint = []
-        if not hasattr(self, "auto_visual_group_id"):
-            self.auto_visual_group_id = 1
+        self.auto_visual_group_id = int(getattr(self.settings, "selected_algorithm_group_id", 1))
         self._init_auto_visual_demo()
         self.state = GameState.SIMULATION
 
@@ -398,16 +397,7 @@ class AutoModeMixin:
             self._draw_text(label, self.font_tiny_bold, (255, 255, 255), cx, cy - 8, center=True)
 
     def _handle_auto_visual_mouse_click(self, pos: tuple[int, int]) -> bool:
-        """Xử lý click riêng trong Auto Visualizer."""
-        rects = getattr(self, "auto_visual_group_button_rects", {})
-
-        for group_id, rect in rects.items():
-            if rect and rect.collidepoint(pos):
-                self.auto_visual_group_id = int(group_id)
-                self.elapsed_time = 0.0
-                self._init_auto_visual_demo()
-                return True
-
+        """Auto visual group is selected from the main menu level picker."""
         return False
 
     def _try_move_auto_visual_delta(self, shipper, dx: int, dy: int) -> bool:

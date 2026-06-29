@@ -88,6 +88,9 @@ def get_icon_path(name: str):
         "simulation": ["simulation_button.png", "SimulationBtn.png", "Simulation.png", "simulation.png"],
         "sound_on": ["sound_on.png", "SoundOnBtn.png", "SoundOn.png", "volume_on.png", "speaker_on.png"],
         "sound_off": ["sound_off.png", "SoundOffBtn.png", "SoundOff.png", "volume_off.png", "speaker_off.png"],
+        "pause": ["pause.png", "PauseBtn.png", "Pause.png"],
+        "left": ["left_button.png", "LeftBtn.png", "left.png", "arrow_left.png"],
+        "right": ["right_button.png", "RightBtn.png", "right.png", "arrow_right.png"],
         "menu": ["menu_button.png", "MenuBtn.png", "HomeBtn.png", "menu.png", "help.png", "settings.png"],
     }
 

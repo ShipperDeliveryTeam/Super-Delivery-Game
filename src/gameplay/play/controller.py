@@ -40,6 +40,8 @@ class PlayModeMixin:
             self.order_timer = 0.0
             self._refresh_player_path_hint()
 
+        self._update_player_delivery_timeouts()
+
         if self.player and self.player.money >= self.settings.target_revenue:
             self._finish_game("Player")
             return
@@ -98,16 +100,20 @@ class PlayModeMixin:
                 self._replenish_player_order_offers()
                 continue
 
-            task.assign_to("Player")
+            if not task.assign_to("Player"):
+                continue
 
             if not task.picked_up and current_pos == task.store_pos:
                 picked = task.try_pickup("Player", current_pos)
                 if picked:
+                    task.delivery_started_at = float(getattr(self, "elapsed_time", 0.0))
                     self.player_task = task
                     self._refresh_player_path_hint()
                 break
 
             if task.picked_up and current_pos == task.house_pos:
+                if getattr(task, "delivery_started_at", None) is None:
+                    task.delivery_started_at = float(getattr(self, "elapsed_time", 0.0))
                 self.player_task = task
                 break
 
