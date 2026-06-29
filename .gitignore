@@ -1,0 +1,42 @@
+# Python cache / build output
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Virtual environments
+.venv/
+.vendor/
+venv/
+env/
+
+# Test and tool caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+
+# Runtime output
+*.log
+stats.csv
+assets/images/algorithm_summary.csv
+assets/images/*_comparison.png
+
+# Local scratch, backup and editor files
+*.bak
+*_bak
+*.final_bak
+scratch_*.py
+debug_targets*.txt
+patch.py
+.vscode/
+.idea/
+
+# Tiled local session state (project/map source files remain tracked)
+*.tiled-session
+
+# OS metadata
+.DS_Store
+Thumbs.db

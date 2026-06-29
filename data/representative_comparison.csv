@@ -1,0 +1,19 @@
+﻿map_id,group_id,group_name,algorithm,total_score,total_distance,completed_orders,expanded_nodes,runtime_ms,reason
+1,1,Tìm kiếm không có thông tin,UCS,558.6,207.0,6,1744,4.6861,Tối ưu chi phí đường đi tốt hơn BFS/DFS khi map có trọng số.
+1,2,Tìm kiếm có thông tin,ASTAR,558.6,207.0,6,446,1.3266,Cân bằng tốt giữa chi phí tối ưu và số node mở rộng.
+1,3,Tìm kiếm cục bộ,SIMULATED_ANNEALING,561.8,191.0,6,4976,2241.2831,Có khả năng thoát cực trị cục bộ nhờ chấp nhận nghiệm xấu có kiểm soát.
+1,4,Môi trường phức tạp,AND_OR_SEARCH,561.8,191.0,6,10,6.0662,Phù hợp môi trường bất định vì xét các trường hợp rủi ro.
+1,5,Tìm kiếm ràng buộc,FORWARD_CHECKING,561.8,191.0,6,1628,4.3026,"Lọc nhánh sớm, hiệu quả hơn backtracking thuần."
+1,6,Tìm kiếm đối kháng,ALPHA_BETA,366.0,0.0,6,807,3.2543,Cho kết quả như Minimax nhưng duyệt ít node hơn nhờ cắt tỉa.
+2,1,Tìm kiếm không có thông tin,UCS,497.76,511.2031,6,2756,11.2158,Tối ưu chi phí đường đi tốt hơn BFS/DFS khi map có trọng số.
+2,2,Tìm kiếm có thông tin,ASTAR,497.76,511.2031,6,1162,5.4663,Cân bằng tốt giữa chi phí tối ưu và số node mở rộng.
+2,3,Tìm kiếm cục bộ,SIMULATED_ANNEALING,529.62,351.9066,6,4976,2536.6748,Có khả năng thoát cực trị cục bộ nhờ chấp nhận nghiệm xấu có kiểm soát.
+2,4,Môi trường phức tạp,AND_OR_SEARCH,527.45,362.7351,6,25,19.0323,Phù hợp môi trường bất định vì xét các trường hợp rủi ro.
+2,5,Tìm kiếm ràng buộc,FORWARD_CHECKING,526.22,368.8772,6,15000,38.2726,"Lọc nhánh sớm, hiệu quả hơn backtracking thuần."
+2,6,Tìm kiếm đối kháng,ALPHA_BETA,451.4,0.0,6,670,2.3955,Cho kết quả như Minimax nhưng duyệt ít node hơn nhờ cắt tỉa.
+3,1,Tìm kiếm không có thông tin,UCS,541.19,294.066,6,2065,8.4027,Tối ưu chi phí đường đi tốt hơn BFS/DFS khi map có trọng số.
+3,2,Tìm kiếm có thông tin,ASTAR,541.19,294.066,6,512,2.1912,Cân bằng tốt giữa chi phí tối ưu và số node mở rộng.
+3,3,Tìm kiếm cục bộ,SIMULATED_ANNEALING,560.0,199.9828,6,4976,2612.0822,Có khả năng thoát cực trị cục bộ nhờ chấp nhận nghiệm xấu có kiểm soát.
+3,4,Môi trường phức tạp,AND_OR_SEARCH,558.94,205.2965,6,30,24.9991,Phù hợp môi trường bất định vì xét các trường hợp rủi ro.
+3,5,Tìm kiếm ràng buộc,FORWARD_CHECKING,560.0,199.9828,6,15000,38.1033,"Lọc nhánh sớm, hiệu quả hơn backtracking thuần."
+3,6,Tìm kiếm đối kháng,ALPHA_BETA,436.1,0.0,6,676,3.5039,Cho kết quả như Minimax nhưng duyệt ít node hơn nhờ cắt tỉa.
