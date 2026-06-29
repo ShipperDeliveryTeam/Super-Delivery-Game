@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import random
 from dataclasses import dataclass
 from time import perf_counter
 from typing import Callable
@@ -39,17 +40,23 @@ def steepest_hill(
             break
 
         current_h = heuristic(current)
-        candidates: list[GridPos] = []
+        best_h = current_h
+        best_neighbors = []
 
         for neighbor in get_neighbors(current):
             generated += 1
-            if heuristic(neighbor) <= current_h:
-                candidates.append(neighbor)
+            neighbor_h = heuristic(neighbor)
 
-        if not candidates:
+            if neighbor_h < best_h:
+                best_h = neighbor_h
+                best_neighbors = [neighbor]
+            elif neighbor_h == best_h and neighbor_h <= current_h:
+                best_neighbors.append(neighbor)
+
+        if not best_neighbors:
             break
 
-        current = min(candidates, key=heuristic)
+        current = random.choice(best_neighbors)
         path.append(current)
 
     return LocalPathResult(

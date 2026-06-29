@@ -5,7 +5,14 @@ from time import perf_counter
 from src.ai.pathfinding.complex_search.no_observation import make_belief_states, make_result
 
 
-def partial_observation_search(order_ids, possible_traps=(), known_traps=(), capacity=1, max_iterations=100, max_traps=None):
+def partial_observation_search(
+    order_ids,
+    possible_traps=(),
+    known_traps=(),
+    capacity=1,
+    max_iterations=100,
+    max_traps=None,
+):
     started_at = perf_counter()
 
     # Biết trước 2 bẫy thật. Hai bẫy này luôn nằm trong mọi belief state.

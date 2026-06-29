@@ -146,36 +146,67 @@ def order_actions(
         return sorted(actions)
 
     if strategy == "NEAREST_COST":
-        return sorted(
-            actions,
-            key=lambda action: (
-                problem.cost_provider.get_cost(partial.current_label, action),
-                action,
-            ),
-        )
+        def nearest_key(action: str):
+            action_cost = problem.cost_provider.get_cost(partial.current_label, action)
+            return action_cost, action
+
+        return sorted(actions, key=nearest_key)
 
     if strategy == "AC3_PRIORITY":
-        return sorted(
-            actions,
-            key=lambda action: (
-                0 if is_delivery(action) else 1,
-                problem.cost_provider.get_cost(partial.current_label, action),
-                action,
-            ),
-        )
+        def ac3_key(action: str):
+            if is_delivery(action):
+                action_type = 0
+            else:
+                action_type = 1
+
+            action_cost = problem.cost_provider.get_cost(partial.current_label, action)
+            return action_type, action_cost, action
+
+        return sorted(actions, key=ac3_key)
 
     return actions
 
 
-def run_ac3_precheck(order_ids: Sequence[str]) -> bool:
-    """
-    AC-3 preprocessing đơn giản cho mô hình route:
+def make_ac3_domains(order_ids: Sequence[str]) -> dict[str, set[str]]:
+    domains: dict[str, set[str]] = {}
+    for order_id in order_ids:
+        domains[f"P_{order_id}"] = {order_id}
+        domains[f"D_{order_id}"] = {order_id}
+    return domains
 
-    AC-3 đơn giản: kiểm tra miền đơn hàng trước khi backtracking.
-    """
+
+def make_ac3_queue(order_ids: Sequence[str]) -> list[tuple[str, str]]:
+    queue: list[tuple[str, str]] = []
+    for order_id in order_ids:
+        queue.append((f"P_{order_id}", f"D_{order_id}"))
+        queue.append((f"D_{order_id}", f"P_{order_id}"))
+    return queue
+
+
+def revise(domains: dict[str, set[str]], left: str, right: str) -> bool:
+    changed = False
+
+    for value in list(domains[left]):
+        if value not in domains[right]:
+            domains[left].remove(value)
+            changed = True
+
+    return changed
+
+
+def run_ac3_precheck(order_ids: Sequence[str]) -> bool:
     for order_id in order_ids:
         if not order_id:
             return False
+
+    domains = make_ac3_domains(order_ids)
+    queue = make_ac3_queue(order_ids)
+
+    while queue:
+        left, right = queue.pop(0)
+        if revise(domains, left, right):
+            if not domains[left]:
+                return False
 
     return True
 

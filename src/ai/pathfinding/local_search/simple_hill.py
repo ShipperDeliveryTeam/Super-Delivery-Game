@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import random
 from dataclasses import dataclass
 from time import perf_counter
 from typing import Callable
@@ -39,18 +40,23 @@ def simple_hill(
             break
 
         current_h = heuristic(current)
-        next_pos = None
+        best_h = current_h
+        best_neighbors = []
 
         for neighbor in get_neighbors(current):
             generated += 1
-            if heuristic(neighbor) <= current_h:
-                next_pos = neighbor
-                break
+            neighbor_h = heuristic(neighbor)
 
-        if next_pos is None:
+            if neighbor_h < best_h:
+                best_h = neighbor_h
+                best_neighbors = [neighbor]
+            elif neighbor_h == best_h and neighbor_h <= current_h:
+                best_neighbors.append(neighbor)
+
+        if not best_neighbors:
             break
 
-        current = next_pos
+        current = random.choice(best_neighbors)
         path.append(current)
 
     return LocalPathResult(

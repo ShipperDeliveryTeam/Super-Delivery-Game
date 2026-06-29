@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import random
 from collections import deque
 from dataclasses import dataclass
 from heapq import heappop, heappush
+from itertools import permutations
 from math import inf, sqrt
 from time import perf_counter
 
@@ -215,28 +217,48 @@ class DeliverySearch:
             return self.local_beam_segment(start, goal, order, action)
         return self.best_first(start, goal, order, action)
 
-    def local_h(self, pos: GridPos, goal: GridPos) -> float:
-        key = (pos, goal)
+    def local_h(self, node: DeliveryNode, order: AutoOrder | None = None, action: str = "") -> float:
+        key = (node.pos, node.state, node.carrying, node.delivery, getattr(order, "id", None), action)
         if key in self.local_h_cache:
             return self.local_h_cache[key]
 
-        frontier = deque([(pos, 0)])
-        reached = {pos}
+        if node.carrying:
+            for order_item in self.orders:
+                if house_name(order_item) == node.delivery:
+                    after_delivery = change_to_road(node.state, order_item.customer_pos)
+                    value = distance(self.map_data.map_id, node.pos, order_item.customer_pos)
+                    value += self.best_order_h(order_item.customer_pos, after_delivery)
+                    self.local_h_cache[key] = value
+                    return value
+            return float("inf")
 
-        while frontier:
-            current, step = frontier.popleft()
-            if current == goal:
-                self.local_h_cache[key] = float(step)
-                return float(step)
+        value = self.best_order_h(node.pos, node.state)
+        self.local_h_cache[key] = value
+        return value
 
-            for next_pos, _ in self.graph.get_neighbors(current):
-                if next_pos in reached:
-                    continue
-                reached.add(next_pos)
-                frontier.append((next_pos, step + 1))
+    def best_order_h(self, start_pos: GridPos, state: MatrixState) -> float:
+        orders_left = []
+        for order in self.orders:
+            x, y = order.store_pos
+            if state[y][x] == "S":
+                orders_left.append(order)
 
-        self.local_h_cache[key] = float("inf")
-        return float("inf")
+        if not orders_left:
+            return 0.0
+
+        best = float("inf")
+        for order_list in permutations(orders_left):
+            total = 0.0
+            current_pos = start_pos
+            for order in order_list:
+                total += distance(self.map_data.map_id, current_pos, order.store_pos)
+                total += distance(self.map_data.map_id, order.store_pos, order.customer_pos)
+                current_pos = order.customer_pos
+
+            if total < best:
+                best = total
+
+        return best
 
     def simple_hill_segment(self, start: DeliveryNode, goal: GridPos, order: AutoOrder, action: str) -> DeliveryNode | None:
         current = start
@@ -247,23 +269,24 @@ class DeliverySearch:
             if current.pos == goal:
                 return current
 
-            current_h = self.local_h(current.pos, goal)
-            same_h_node = None
+            current_h = self.local_h(current, order, action)
+            best_h = current_h
+            best_nodes = []
 
             for child in self.children(current, order, action):
                 self.generated += 1
-                child_h = self.local_h(child.pos, goal)
+                child_h = self.local_h(child, order, action)
 
-                if child_h < current_h:
-                    current = child
-                    break
+                if child_h < best_h:
+                    best_h = child_h
+                    best_nodes = [child]
+                elif child_h == best_h and child_h <= current_h:
+                    best_nodes.append(child)
 
-                if child_h == current_h and same_h_node is None:
-                    same_h_node = child
-            else:
-                if same_h_node is None:
-                    return None
-                current = same_h_node
+            if not best_nodes:
+                return None
+
+            current = random.choice(best_nodes)
 
         return current if current.pos == goal else None
 
@@ -276,20 +299,24 @@ class DeliverySearch:
             if current.pos == goal:
                 return current
 
-            current_h = self.local_h(current.pos, goal)
-            candidates = []
+            current_h = self.local_h(current, order, action)
+            best_h = current_h
+            best_nodes = []
 
             for child in self.children(current, order, action):
                 self.generated += 1
-                child_h = self.local_h(child.pos, goal)
-                if child_h <= current_h:
-                    candidates.append((child_h, child.cost, child))
+                child_h = self.local_h(child, order, action)
 
-            if not candidates:
+                if child_h < best_h:
+                    best_h = child_h
+                    best_nodes = [child]
+                elif child_h == best_h and child_h <= current_h:
+                    best_nodes.append(child)
+
+            if not best_nodes:
                 return None
 
-            candidates.sort(key=lambda item: (item[0], item[1]))
-            current = candidates[0][2]
+            current = random.choice(best_nodes)
 
         return current if current.pos == goal else None
 
@@ -308,7 +335,7 @@ class DeliverySearch:
 
                 for child in self.children(node, order, action):
                     self.generated += 1
-                    h = self.local_h(child.pos, goal)
+                    h = self.local_h(child, order, action)
                     candidates.append((h, child.cost, child))
 
             if not candidates:
@@ -411,6 +438,8 @@ class DeliverySearch:
                 score = len(make_path(node))
             elif self.algorithm == "GREEDY":
                 score = distance(self.map_data.map_id, order.store_pos, order.customer_pos)
+            elif self.algorithm in ("SIMPLE_HILL", "STEEPEST_HILL", "LOCAL_BEAM"):
+                score = self.local_h(node)
             else:
                 score = node.cost
 

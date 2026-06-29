@@ -60,7 +60,6 @@ def make_belief_states(possible_traps, known_traps=(), max_traps=None):
     for index in range(2):
         min_count = max(1, len(known_traps))
         trap_count = rng.randint(min_count, max_count)
-        need_more = max(0, trap_count - len(known_traps))
 
         candidates = list(possible_traps)
         rng.shuffle(candidates)

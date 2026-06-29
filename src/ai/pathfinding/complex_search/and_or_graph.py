@@ -40,7 +40,16 @@ def _make_and_or_cases(possible_traps, known_traps=(), case_count=60, max_traps=
     return tuple(cases)
 
 
-def and_or_search(order_ids, possible_traps=(), known_traps=(), capacity=1, beam_width=5, max_iterations=100, seed=42, max_traps=None):
+def and_or_search(
+    order_ids,
+    possible_traps=(),
+    known_traps=(),
+    capacity=1,
+    beam_width=5,
+    max_iterations=100,
+    seed=42,
+    max_traps=None,
+):
     started_at = perf_counter()
 
     # Riêng AND-OR sinh nhiều nhánh khả năng để chọn một plan dùng được cho các nhánh.

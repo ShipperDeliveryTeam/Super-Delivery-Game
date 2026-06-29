@@ -199,16 +199,15 @@ def order_actions_by_gain(
         current_label = state.opponent_label
         reverse = False
 
-    return sorted(
-        actions,
-        key=lambda order_id: calculate_order_gain(
+    def gain_of(order_id: str) -> float:
+        return calculate_order_gain(
             matrix=matrix,
             reward_map=reward_map,
             current_label=current_label,
             order_id=order_id,
-        ),
-        reverse=reverse,
-    )
+        )
+
+    return sorted(actions, key=gain_of, reverse=reverse)
 
 
 def now_ms_since(started_at: float) -> float:

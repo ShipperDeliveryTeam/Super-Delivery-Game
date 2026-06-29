@@ -33,14 +33,25 @@ def local_beam_search(
     expanded = 0
     generated = 0
 
+    def path_score(item):
+        return heuristic(item[-1])
+
     for _ in range(max_steps):
         candidates: list[list[GridPos]] = []
 
         for path in beam:
             current = path[-1]
             expanded += 1
+
             if current == goal:
-                return LocalPathResult("LOCAL_BEAM", path, True, expanded, generated, (perf_counter() - started_at) * 1000)
+                return LocalPathResult(
+                    algorithm="LOCAL_BEAM",
+                    path=path,
+                    found=True,
+                    expanded_nodes=expanded,
+                    generated_nodes=generated,
+                    runtime_ms=(perf_counter() - started_at) * 1000,
+                )
 
             for neighbor in get_neighbors(current):
                 generated += 1
@@ -49,10 +60,14 @@ def local_beam_search(
         if not candidates:
             break
 
-        candidates.sort(key=lambda item: heuristic(item[-1]))
+        candidates.sort(key=path_score)
         beam = candidates[:beam_width]
 
-    best_path = min(beam, key=lambda item: heuristic(item[-1])) if beam else [start]
+    if beam:
+        best_path = min(beam, key=path_score)
+    else:
+        best_path = [start]
+
     return LocalPathResult(
         algorithm="LOCAL_BEAM",
         path=best_path,
