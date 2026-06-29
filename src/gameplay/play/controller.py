@@ -15,7 +15,9 @@ class PlayModeMixin:
         self.state = GameState.PLAYING
 
     def _update_play_mode(self, dt: float) -> None:
-        if getattr(self, "delivery_confirmation_open", False):
+        if self._player_trap_wait_active():
+            self.move_dir = (0, 0)
+        elif getattr(self, "delivery_confirmation_open", False):
             self.move_dir = (0, 0)
         elif not self.auto_player_enabled:
             self._poll_keyboard_movement()
@@ -23,7 +25,9 @@ class PlayModeMixin:
         self.move_timer += dt
         if self.move_timer >= 0.065:
             self.move_timer = 0.0
-            if getattr(self, "delivery_confirmation_open", False):
+            if self._player_trap_wait_active():
+                pass
+            elif getattr(self, "delivery_confirmation_open", False):
                 pass
             elif self.auto_player_enabled:
                 self._move_player_auto()
@@ -52,6 +56,9 @@ class PlayModeMixin:
 
     def _request_player_step(self, dx: int, dy: int) -> None:
         if self.state != GameState.PLAYING or self.auto_player_enabled:
+            return
+
+        if self._player_trap_wait_active():
             return
 
         if getattr(self, "delivery_confirmation_open", False):
@@ -124,13 +131,23 @@ class PlayModeMixin:
             if self._player_last_trap_penalty_pos == self.player.grid_pos:
                 return
 
-            self.player.money = max(0, self.player.money - 15)
+            self.player.stop()
+            self.move_dir = (0, 0)
+            self.player.money = max(0, self.player.money - 100)
+            self.player_trap_wait_until = float(getattr(self, "elapsed_time", 0.0)) + 5.0
             self._player_last_trap_penalty_pos = self.player.grid_pos
         else:
             self._player_last_trap_penalty_pos = None
 
+    def _player_trap_wait_active(self) -> bool:
+        return float(getattr(self, "player_trap_wait_until", 0.0)) > float(getattr(self, "elapsed_time", 0.0))
+
     def _move_player(self, allow_queue: bool = True) -> None:
         if not self.player:
+            return
+
+        if self._player_trap_wait_active():
+            self.move_dir = (0, 0)
             return
 
         dx, dy = self.move_dir

@@ -227,10 +227,10 @@
   <object id="51" name="BFS_spawn" type="NPC" x="704" y="672" width="32" height="32"/>
   <object id="52" name="ASTAR_spawn" type="NPC" x="768" y="672" width="32" height="32"/>
   <object id="53" name="Q_LEARNING_spawn" type="NPC" x="800" y="672" width="32" height="32"/>
-  <object id="54" name="traffic_trap_1" type="TrafficTrap" x="288" y="832" width="32" height="32"/>
-  <object id="55" name="traffic_trap_2" type="TrafficTrap" x="704" y="576" width="32" height="32"/>
-  <object id="56" name="traffic_trap_3" type="TrafficTrap" x="736" y="352" width="32" height="32"/>
+  <object id="54" name="traffic_trap_1" type="TrafficTrap" x="768" y="576" width="32" height="32"/>
+  <object id="55" name="traffic_trap_2" type="TrafficTrap" x="512" y="704" width="32" height="32"/>
+  <object id="56" name="traffic_trap_3" type="TrafficTrap" x="800" y="320" width="32" height="32"/>
   <object id="57" name="traffic_trap_4" type="TrafficTrap" x="960" y="960" width="32" height="32"/>
-  <object id="58" name="traffic_trap_5" type="TrafficTrap" x="1152" y="160" width="32" height="32"/>
+  <object id="58" name="traffic_trap_5" type="TrafficTrap" x="1088" y="160" width="32" height="32"/>
 </objectgroup>
 </map>

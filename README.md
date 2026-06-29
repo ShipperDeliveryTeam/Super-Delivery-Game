@@ -6,25 +6,49 @@ Super Delivery Game là trò chơi mô phỏng giao hàng được xây dựng b
 
 ### Gameplay
 
-| Chế độ | GIF | Mô tả |
-|---|---|---|
-| Play Mode 1 | ![Play mode 1](docs/readme-gifs/play1.gif) | Người chơi nhận đơn, di chuyển trên bản đồ và giao hàng để đạt mục tiêu điểm. |
-| Play Mode 2 | ![Play mode 2](docs/readme-gifs/play2.gif) | Minh họa tương tác trong game, HUD đơn hàng, shipper và các điểm giao/nhận. |
-| Map 2 | ![Map 2](docs/readme-gifs/map2.gif) | Bản đồ có độ khó trung bình, đường đi và chướng ngại phức tạp hơn. |
-| Map 3 | ![Map 3](docs/readme-gifs/map3.gif) | Bản đồ khó với nhiều tuyến đường, chi phí và tình huống di chuyển đa dạng. |
+| Chế độ | GIF |
+|---|---|
+| Play Mode 1 | ![Play mode 1](docs/readme-gifs/play1.gif) |
+| Play Mode 2 | ![Play mode 2](docs/readme-gifs/play2.gif) |
+| Play Mode 3 | ![Play mode 3](docs/readme-gifs/play3.gif) |
+
 
 ### Mô Phỏng Thuật Toán Bằng GIF
 
 Phần này dùng các GIF preview nhẹ trong `docs/readme-gifs` để mô phỏng cách từng nhóm thuật toán ra quyết định trước khi xem bảng so sánh benchmark. Các GIF gốc chất lượng cao nằm trong `data/gif`.
 
-| Nhóm | GIF mô phỏng | Thuật toán | Ý nghĩa trong dự án |
-|---:|---|---|---|
-| 1 | ![Nhóm 1](docs/readme-gifs/nhom1.gif) | BFS, DFS, UCS | Tìm đường từ điểm hiện tại đến điểm nhận/giao bằng không gian trạng thái rõ ràng, không dùng heuristic. |
-| 2 | ![Nhóm 2](docs/readme-gifs/nhom2.gif) | Greedy, A*, IDA* | Ưu tiên hướng đi có vẻ gần đích hơn bằng heuristic khoảng cách/chi phí. |
-| 3 | ![Nhóm 3](docs/readme-gifs/nhom3.gif) | Simple Hill, Steepest Hill, Local Beam | Tối ưu thứ tự nhận/giao đơn dựa trên trạng thái lân cận và giá trị lợi ích. |
-| 4 | ![Nhóm 4](docs/readme-gifs/nhom4.gif) | No Observation, Partial Observation, AND-OR Search | Lập kế hoạch trong môi trường có bẫy, bất định hoặc thông tin không đầy đủ. |
-| 5 | ![Nhóm 5](docs/readme-gifs/nhom5.gif) | Backtracking, Forward Checking, AC3 Backtracking | Giải bài toán ràng buộc giữa đơn hàng, điểm nhận, điểm giao, thời gian và khả năng di chuyển. |
-| 6 | ![Nhóm 6](docs/readme-gifs/nhom6.gif) | Minimax, Alpha-Beta, Expectimax | Mô phỏng cạnh tranh giữa shipper thuật toán và shipper đối thủ dùng Greedy. |
+### Map1
+
+| Nhóm | Map1 |
+|---:|---|
+| 1 | ![Nhóm 1](docs/readme-gifs/nhom1.gif) |
+| 2 | ![Nhóm 2](docs/readme-gifs/nhom2.gif) |
+| 3 | ![Nhóm 3](docs/readme-gifs/nhom3.gif) |
+| 4 | ![Nhóm 4](docs/readme-gifs/nhom4.gif) |
+| 5 | ![Nhóm 5](docs/readme-gifs/nhom5.gif) |
+| 6 | ![Nhóm 6](docs/readme-gifs/nhom6.gif) |
+
+### Map2
+
+| Nhóm | Map2 |
+|---:|---|
+| 1 | ![Nhóm 1](docs/readme-gifs/2_nhom1.gif) |
+| 2 | ![Nhóm 2](docs/readme-gifs/2_nhom2.gif) |
+| 3 | ![Nhóm 3](docs/readme-gifs/2_nhom3.gif) |
+| 4 | ![Nhóm 4](docs/readme-gifs/2_nhom4.gif) |
+| 5 | ![Nhóm 5](docs/readme-gifs/2_nhom5.gif) |
+| 6 | ![Nhóm 6](docs/readme-gifs/2_nhom6.gif) |
+
+### Map3
+| Nhóm | Map3 |
+|---:|---|
+| 1 | ![Nhóm 1](docs/readme-gifs/3_nhom1.gif) |
+| 2 | ![Nhóm 2](docs/readme-gifs/3_nhom2.gif) |
+| 3 | ![Nhóm 3](docs/readme-gifs/3_nhom3.gif) |
+| 4 | ![Nhóm 4](docs/readme-gifs/3_nhom4.gif) |
+| 5 | ![Nhóm 5](docs/readme-gifs/3_nhom5.gif) |
+| 6 | ![Nhóm 6](docs/readme-gifs/3_nhom6.gif) |
+
 
 ## Tính Năng Chính
 

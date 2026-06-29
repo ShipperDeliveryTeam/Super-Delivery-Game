@@ -73,6 +73,7 @@ class GameFlowMixin:
         self.auto_player_enabled = False
         self.move_dir = (0, 0)
         self._player_last_trap_penalty_pos = None
+        self.player_trap_wait_until = 0.0
         self.delivery_confirmation_open = False
         self.delivery_checkbox_checked = False
         self._delivery_prompt_dismissed_pos = None

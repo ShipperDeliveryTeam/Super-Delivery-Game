@@ -147,6 +147,7 @@ class GameManager(
         self.player_path_hint: List[Tuple[int, int]] = []
         self.player_path_expanded = 0
         self._player_last_trap_penalty_pos: Tuple[int, int] | None = None
+        self.player_trap_wait_until = 0.0
 
         self.npc_shippers: list[DirectionalShipper] = []
         self.npc_tasks: dict[str, DeliveryTask] = {}

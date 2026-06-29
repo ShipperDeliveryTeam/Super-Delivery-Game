@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import random
+from heapq import heappop, heappush
 from src.core.game_state import GameState
 from src.core.constants import NPC_COLORS, TILE_SIZE
 from src.entities.directional_shipper import DirectionalShipper
 from src.gameplay.auto.complex_traps import build_trap_setup
+from src.gameplay.auto.maps.graph_adapter import AutoMapGraph
 from src.gameplay.auto.order_factory import load_orders_for_map
 from src.gameplay.auto.maps.tmx_loader import load_auto_map
 from src.gameplay.auto.visualizer import (
@@ -235,12 +237,18 @@ class AutoModeMixin:
         )
 
     def _auto_visual_can_render_step(self, pos: tuple[int, int]) -> bool:
+        if self._auto_visual_is_trap_pos(pos):
+            return False
+
         map_data = getattr(self, "auto_visual_map_data", None)
         if map_data is not None:
             return bool(map_data.is_walkable(pos))
 
         x, y = pos
         return 0 <= y < len(self.grid_matrix) and 0 <= x < len(self.grid_matrix[y])
+
+    def _auto_visual_is_trap_pos(self, pos: tuple[int, int]) -> bool:
+        return tuple(pos) in getattr(self, "auto_visual_hidden_traps", set())
 
     def _auto_visual_action_targets(self, actions: tuple[str, ...]) -> list[tuple[str, tuple[int, int]]]:
         orders = {order.id: order for order in getattr(self, "auto_visual_orders", [])}
@@ -364,6 +372,12 @@ class AutoModeMixin:
             dx = next_pos[0] - base_pos[0]
             dy = next_pos[1] - base_pos[1]
 
+            if self._auto_visual_replan_around_revealed_traps(npc, base_pos, path):
+                continue
+
+            if self._and_or_replan_if_trap_ahead(npc, base_pos, next_pos, path):
+                continue
+
             if self._try_move_auto_visual_delta(npc, dx, dy):
                 path.pop(0)
             else:
@@ -397,6 +411,103 @@ class AutoModeMixin:
         self.auto_visual_trap_wait_until = waits
         npc.auto_visual_trap_hits = int(getattr(npc, "auto_visual_trap_hits", 0)) + 1
         return True
+
+    def _auto_visual_replan_around_revealed_traps(
+        self,
+        npc,
+        base_pos: tuple[int, int],
+        path: list[tuple[int, int]],
+    ) -> bool:
+        revealed = set(getattr(self, "auto_visual_revealed_traps", set()))
+        blocked = revealed - {tuple(base_pos)}
+
+        if not blocked or not any(tuple(pos) in blocked for pos in path):
+            return False
+
+        map_data = getattr(self, "auto_visual_map_data", None)
+        if map_data is None:
+            return False
+
+        targets = [
+            tuple(target_pos)
+            for _, target_pos in getattr(self, "auto_visual_targets", {}).get(npc.name, [])
+        ]
+        if not targets and path:
+            targets = [tuple(path[-1])]
+
+        rebuilt: list[tuple[int, int]] = []
+        current = tuple(base_pos)
+
+        for target in targets:
+            segment = self._auto_visual_safe_segment(current, target, blocked)
+            if not segment:
+                return False
+
+            rebuilt.extend(segment[1:])
+            current = target
+
+        if not rebuilt or rebuilt == path:
+            return False
+
+        self.npc_paths[npc.name] = rebuilt
+        return True
+
+    def _auto_visual_safe_segment(
+        self,
+        start: tuple[int, int],
+        goal: tuple[int, int],
+        blocked: set[tuple[int, int]],
+    ) -> list[tuple[int, int]]:
+        map_data = getattr(self, "auto_visual_map_data", None)
+        if map_data is None:
+            return []
+
+        start = tuple(start)
+        goal = tuple(goal)
+        blocked = {tuple(pos) for pos in blocked}
+        blocked.discard(start)
+        blocked.discard(goal)
+
+        if start == goal:
+            return [start]
+
+        graph = AutoMapGraph(map_data)
+        frontier: list[tuple[float, int, tuple[int, int]]] = []
+        order = 0
+        heappush(frontier, (0.0, order, start))
+        parent: dict[tuple[int, int], tuple[int, int] | None] = {start: None}
+        cost: dict[tuple[int, int], float] = {start: 0.0}
+
+        while frontier:
+            _, _, current = heappop(frontier)
+
+            if current == goal:
+                break
+
+            for next_pos, step_cost in graph.get_neighbors(current):
+                next_pos = tuple(next_pos)
+                if next_pos in blocked:
+                    continue
+
+                new_cost = cost[current] + step_cost
+                if new_cost >= cost.get(next_pos, float("inf")):
+                    continue
+
+                cost[next_pos] = new_cost
+                parent[next_pos] = current
+                order += 1
+                heappush(frontier, (new_cost, order, next_pos))
+
+        if goal not in parent:
+            return []
+
+        segment = []
+        current: tuple[int, int] | None = goal
+        while current is not None:
+            segment.append(current)
+            current = parent[current]
+        segment.reverse()
+        return segment
 
     def _draw_auto_visual_locations(self, bounce_offset: float) -> None:
         """Draw pickup/delivery markers for the active Auto orders."""

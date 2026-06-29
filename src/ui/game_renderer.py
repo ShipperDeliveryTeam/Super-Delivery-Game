@@ -327,8 +327,33 @@ class GameRendererMixin:
                     pygame.draw.rect(self.screen, (150, 75, 35), rect)
 
     def _draw_static_icons(self) -> None:
-        # User requested to remove S and H icons from the map, replaced by active bouncing locations
-        pass
+        if self.simulation_mode:
+            return
+
+        for trap_pos in getattr(self, "trap_positions", set()):
+            self._draw_trap_icon(trap_pos)
+
+    def _draw_trap_icon(self, grid_pos: Tuple[int, int]) -> None:
+        x, y = self._grid_to_screen(grid_pos)
+        cell_w, cell_h = self._cell_size_screen()
+        icon = self.icons.get("trap")
+
+        if icon:
+            scale = 1.35
+            icon_w = max(1, int(cell_w * scale))
+            icon_h = max(1, int(cell_h * scale))
+            icon = pygame.transform.smoothscale(icon, (icon_w, icon_h))
+            draw_x = x + (cell_w - icon_w) // 2
+            draw_y = y + (cell_h - icon_h) // 2
+            self.screen.blit(icon, (draw_x, draw_y))
+            return
+
+        pygame.draw.circle(
+            self.screen,
+            (230, 55, 55),
+            (x + cell_w // 2, y + cell_h // 2),
+            max(7, min(cell_w, cell_h) // 2),
+        )
 
     def _draw_target_marker(self, grid_pos: Tuple[int, int]) -> None:
         x, y = self._grid_to_screen(grid_pos)

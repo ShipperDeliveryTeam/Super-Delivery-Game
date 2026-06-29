@@ -130,8 +130,8 @@
   <object id="51" name="algorithm_spawn_1" type="NPC" x="736" y="672" width="32" height="32"/>
   <object id="52" name="algorithm_spawn_2" type="NPC" x="736" y="672" width="32" height="32"/>
   <object id="53" name="algorithm_spawn_3" type="NPC" x="736" y="672" width="32" height="32"/>
-  <object id="54" name="traffic_trap_1" type="TrafficTrap" x="704" y="576" width="32" height="32"/>
-  <object id="55" name="traffic_trap_2" type="TrafficTrap" x="736" y="352" width="32" height="32"/>
-  <object id="56" name="traffic_trap_3" type="TrafficTrap" x="1152" y="160" width="32" height="32"/>
+  <object id="54" name="traffic_trap_1" type="TrafficTrap" x="768" y="576" width="32" height="32"/>
+  <object id="55" name="traffic_trap_2" type="TrafficTrap" x="512" y="704" width="32" height="32"/>
+  <object id="56" name="traffic_trap_3" type="TrafficTrap" x="1088" y="160" width="32" height="32"/>
 </objectgroup>
 </map>
