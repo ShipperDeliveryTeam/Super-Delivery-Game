@@ -36,7 +36,7 @@ from src.ui.left_order_card import LeftOrderCardMixin
 class HudMixin(LeftInformationCardMixin, LeftActiveDeliveryCardMixin, LeftOrderCardMixin):
     def _draw_simulation_hud(self) -> None:
         if getattr(self, "auto_visual_enabled", False):
-            self._draw_auto_visual_hud()
+            self._draw_auto_visual_play_controls()
             return
 
         top_bar = pygame.Rect(0, 0, SCREEN_WIDTH, 34)
@@ -61,6 +61,13 @@ class HudMixin(LeftInformationCardMixin, LeftActiveDeliveryCardMixin, LeftOrderC
             label = f"{npc.name}: {getattr(npc, 'algorithm', '')} -> {target}"
             self._draw_text(label, self.font_tiny, (245, 245, 245), board.x + 34, y)
             y += row_h
+
+    def _draw_auto_visual_play_controls(self) -> None:
+        self._game_sound_rect = pygame.Rect(SCREEN_WIDTH - 150, 14, 58, 58)
+        self._game_pause_rect = pygame.Rect(SCREEN_WIDTH - 80, 14, 58, 58)
+        sound_img = self.ui_sound_on if getattr(self.settings, "sound_enabled", True) else self.ui_sound_off
+        self._draw_round_game_button(self._game_sound_rect, "ON", sound_img)
+        self._draw_round_game_button(self._game_pause_rect, "PAUSE", getattr(self, "ui_pause_button", None))
 
     def _draw_auto_visual_hud(self) -> None:
         from src.gameplay.auto.algorithm_groups import get_group_name
@@ -169,8 +176,7 @@ class HudMixin(LeftInformationCardMixin, LeftActiveDeliveryCardMixin, LeftOrderC
             pygame.draw.rect(self.screen, (8, 35, 55, 185), row, border_radius=7)
             pygame.draw.circle(self.screen, color, (row.x + 14, row.centery), 7)
             pygame.draw.circle(self.screen, (255, 255, 255), (row.x + 14, row.centery), 7, 1)
-            self._draw_fitted_text(f"NPC {index + 1}", self.font_tiny_bold, color, pygame.Rect(row.x + 30, row.y + 2, 54, 20))
-            self._draw_fitted_text(plan.algorithm, self.font_tiny, (235, 245, 255), pygame.Rect(row.x + 86, row.y + 2, row.width - 92, 20))
+            self._draw_fitted_text(plan.algorithm, self.font_tiny_bold, color, pygame.Rect(row.x + 30, row.y + 2, row.width - 36, 20))
 
         board_w = 460
         row_h = 68 if group_id in (4, 5) else 48
@@ -217,15 +223,22 @@ class HudMixin(LeftInformationCardMixin, LeftActiveDeliveryCardMixin, LeftOrderC
             done = bool(npc and self.auto_visual_completed.get(npc.name, False))
             current_pos = npc.grid_pos if npc else "-"
             progress = "DONE" if done else str(current_pos)
+            trap_hits = int(getattr(npc, "auto_visual_trap_hits", 0)) if npc else 0
 
             pygame.draw.circle(self.screen, color, (board.x + 22, y + 13), 7)
             label = (
                 f"{index + 1}. {plan.algorithm}: "
                 f"cost={round(plan.total_cost, 1)} | "
                 f"expanded={plan.expanded_nodes} | "
+                f"trap={trap_hits} | "
                 f"time={plan.runtime_ms:.2f}ms | {progress}"
             )
-            self._draw_text(label, self.font_tiny, (245, 245, 245), board.x + 40, y)
+            self._draw_fitted_text(
+                label,
+                self.font_tiny,
+                (245, 245, 245),
+                pygame.Rect(board.x + 40, y - 1, board.width - 56, 18),
+            )
 
             note = plan.note or plan.group_name
             self._draw_text(note[:70], self.font_tiny, (180, 210, 235), board.x + 40, y + 19)

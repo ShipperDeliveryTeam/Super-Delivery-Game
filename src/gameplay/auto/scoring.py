@@ -10,6 +10,11 @@ RANK_BONUS = {
 }
 
 
+def _is_complete(result: RunResult) -> bool:
+    required_orders = result.total_orders or result.completed_orders
+    return required_orders > 0 and result.completed_orders >= required_orders
+
+
 def calculate_late_penalty(order: AutoOrder, delivered_at: float) -> float:
     """
     Phạt giao trễ.
@@ -50,7 +55,7 @@ def _benchmark_sort_key(result: RunResult) -> tuple:
     Xếp hạng Benchmark công bằng.
 
     Nhóm 1-5:
-    - Ưu tiên hoàn thành đủ 6 đơn.
+    - Ưu tiên hoàn thành đủ số đơn của map.
     - Sau đó ưu tiên completed_orders nhiều hơn.
     - Sau đó ưu tiên finish_time / total_distance thấp hơn.
 
@@ -59,7 +64,7 @@ def _benchmark_sort_key(result: RunResult) -> tuple:
     - Ưu tiên total_score / utility cao hơn.
     - Nếu utility bằng nhau, thuật toán expanded_nodes ít hơn đứng trước.
     """
-    is_failed = 0 if result.completed_orders == 6 else 1
+    is_failed = 0 if _is_complete(result) else 1
 
     if result.algorithm_group == 6:
         return (
@@ -84,7 +89,7 @@ def apply_benchmark_rank_bonus(results: list[RunResult]) -> list[RunResult]:
     Thứ hai: 110%
     Thứ ba trở đi: 100%
 
-    Thuật toán fail vẫn được xếp hạng sau các thuật toán hoàn thành đủ 6 đơn.
+    Thuật toán fail vẫn được xếp hạng sau các thuật toán hoàn thành đủ số đơn của map.
     """
     ranked = sorted(results, key=_benchmark_sort_key)
 
@@ -93,8 +98,8 @@ def apply_benchmark_rank_bonus(results: list[RunResult]) -> list[RunResult]:
 
         bonus = RANK_BONUS.get(index, 1.0)
 
-        # Chỉ cộng bonus nếu hoàn thành đủ 6 đơn.
-        if result.completed_orders == 6:
+        # Chỉ cộng bonus nếu hoàn thành đủ số đơn của map.
+        if _is_complete(result):
             result.total_score = round(result.total_score * bonus, 2)
         else:
             result.total_score = round(result.total_score, 2)

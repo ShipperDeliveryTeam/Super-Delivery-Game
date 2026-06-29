@@ -4,6 +4,8 @@ import csv
 from collections import defaultdict
 from pathlib import Path
 
+from src.gameplay.auto.config import get_auto_map_config
+
 
 BENCHMARK_CSV = Path("data") / "auto_benchmark_results.csv"
 REPRESENTATIVE_CSV = Path("data") / "representative_comparison.csv"
@@ -30,6 +32,18 @@ def to_int(value: str) -> int:
         return int(float(value))
     except ValueError:
         return 0
+
+
+def total_orders_for_row(row: dict[str, str]) -> int:
+    if row.get("total_orders"):
+        return max(1, to_int(row["total_orders"]))
+
+    map_id = to_int(row.get("map_id", "1")) or 1
+    return get_auto_map_config(map_id).order_count
+
+
+def completed_text(row: dict[str, str]) -> str:
+    return f"{row['completed_orders']}/{total_orders_for_row(row)}"
 
 
 def build_group_summary(rows: list[dict[str, str]]) -> str:
@@ -62,7 +76,7 @@ def build_group_summary(rows: list[dict[str, str]]) -> str:
             lines.append(
                 f"| {row['rank']} "
                 f"| {row['algorithm']} "
-                f"| {row['completed_orders']}/6 "
+                f"| {completed_text(row)} "
                 f"| {round(to_float(row['total_score']), 2)} "
                 f"| {round(to_float(row['total_distance']), 2)} "
                 f"| {row['expanded_nodes']} "
@@ -116,7 +130,7 @@ def build_representative_summary(rows: list[dict[str, str]]) -> str:
                 f"| {row['algorithm']} "
                 f"| {round(to_float(row['total_score']), 2)} "
                 f"| {round(to_float(row['total_distance']), 2)} "
-                f"| {row['completed_orders']}/6 "
+                f"| {completed_text(row)} "
                 f"| {row['expanded_nodes']} "
                 f"| {round(to_float(row['runtime_ms']), 4)} "
                 f"| {row['reason']} |"

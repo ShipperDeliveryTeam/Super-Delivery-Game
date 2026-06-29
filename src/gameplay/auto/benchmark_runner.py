@@ -42,6 +42,7 @@ def _build_run_result(
     map_id: int,
     group_id: int,
     algorithm: str,
+    total_orders: int,
     completed_orders: int,
     total_cost: float,
     expanded_nodes: int,
@@ -62,7 +63,7 @@ def _build_run_result(
         shipper_name=f"AI_{algorithm}",
         completed_orders=completed_orders,
         on_time_orders=completed_orders if success else 0,
-        late_orders=0 if success else 6 - completed_orders,
+        late_orders=0 if success else max(0, total_orders - completed_orders),
         total_score=score,
         total_distance=total_cost,
         finish_time=total_cost,
@@ -71,6 +72,7 @@ def _build_run_result(
         memory_kb=0.0,
         replan_count=0,
         trap_hits=0,
+        total_orders=total_orders,
     )
 
 
@@ -88,6 +90,7 @@ def run_pathfinding_benchmark_algorithm(
         map_id=map_id,
         group_id=group_id,
         algorithm=algorithm,
+        total_orders=plan_result.total_orders,
         completed_orders=plan_result.completed_orders,
         total_cost=plan_result.total_cost,
         expanded_nodes=plan_result.expanded_nodes,
@@ -116,6 +119,7 @@ def run_local_search_benchmark_algorithm(
         map_id=map_id,
         group_id=group_id,
         algorithm=algorithm,
+        total_orders=len(orders),
         completed_orders=completed_orders,
         total_cost=result.cost,
         expanded_nodes=result.expanded_nodes,
@@ -172,7 +176,8 @@ def run_complex_search_benchmark_algorithm(
         map_id=map_id,
         group_id=group_id,
         algorithm=algorithm,
-        completed_orders=6,
+        total_orders=len(orders),
+        completed_orders=len(orders),
         total_cost=result.normal_cost,
         expanded_nodes=result.expanded_nodes,
         runtime_ms=result.runtime_ms,
@@ -224,7 +229,8 @@ def run_csp_benchmark_algorithm(
         map_id=map_id,
         group_id=group_id,
         algorithm=algorithm,
-        completed_orders=6,
+        total_orders=len(orders),
+        completed_orders=len(orders),
         total_cost=result.best_state.total_cost,
         expanded_nodes=result.expanded_nodes,
         runtime_ms=result.runtime_ms,
@@ -273,8 +279,7 @@ def run_adversarial_benchmark_algorithm(
     else:
         raise ValueError(f"Unsupported adversarial algorithm: {algorithm}")
 
-    # Group 6 là competition decision, không phải giao đủ 6 đơn.
-    # Để đưa vào cùng bảng benchmark, ta quy đổi utility thành score.
+    # Group 6 is a competition decision model, so convert its utility into benchmark score.
     total_score = max(0.0, round(300.0 + result.expected_utility, 2))
 
     run_result = RunResult(
@@ -283,8 +288,8 @@ def run_adversarial_benchmark_algorithm(
         algorithm_group=group_id,
         algorithm=algorithm,
         shipper_name=f"AI_{algorithm}",
-        completed_orders=6,
-        on_time_orders=6,
+        completed_orders=len(orders),
+        on_time_orders=len(orders),
         late_orders=0,
         total_score=total_score,
         total_distance=0.0,
@@ -294,6 +299,7 @@ def run_adversarial_benchmark_algorithm(
         memory_kb=0.0,
         replan_count=result.pruned_nodes,
         trap_hits=0,
+        total_orders=len(orders),
     )
 
     return run_result
@@ -370,11 +376,12 @@ def print_benchmark_group(
     print(f"Benchmark Map {map_id} - Group {group_id}: {group_name}")
 
     for result in results:
-        status = "OK" if result.completed_orders == 6 else "FAILED"
+        total_orders = result.total_orders or len(load_orders_for_map(map_id))
+        status = "OK" if result.completed_orders >= total_orders else "FAILED"
 
         print(
             f"#{result.rank} {result.algorithm}: {status}, "
-            f"completed={result.completed_orders}/6, "
+            f"completed={result.completed_orders}/{total_orders}, "
             f"score={result.total_score}, "
             f"distance={round(result.total_distance, 2)}, "
             f"expanded={result.expanded_nodes}, "

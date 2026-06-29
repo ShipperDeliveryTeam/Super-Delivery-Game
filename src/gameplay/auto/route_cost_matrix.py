@@ -121,6 +121,7 @@ def build_route_nodes(
 def build_route_cost_matrix(
     map_id: int,
     algorithm: str = "ASTAR",
+    trap_cells=(),
 ) -> RouteCostMatrix:
     """
     Tạo ma trận chi phí giữa START, các điểm nhận và các điểm giao.
@@ -129,7 +130,7 @@ def build_route_cost_matrix(
     gọi A* lại quá nhiều lần.
     """
     map_data = load_auto_map(map_id)
-    graph = AutoMapGraph(map_data)
+    graph = AutoMapGraph(map_data, trap_cells=trap_cells)
     orders = load_orders_for_map(map_id)
 
     nodes = build_route_nodes(

@@ -14,9 +14,10 @@ MAP3_ROUNDABOUT_RINGS = (
 
 
 class AutoMapGraph:
-    def __init__(self, map_data: AutoMapData) -> None:
+    def __init__(self, map_data: AutoMapData, trap_cells=()) -> None:
         self.map_data = map_data
         self.profile = get_auto_map_profile(map_data.map_id)
+        self.trap_cells = {tuple(pos) for pos in trap_cells}
 
     def get_neighbors(self, pos: GridPos) -> list[tuple[GridPos, float]]:
         x, y = pos
@@ -49,7 +50,11 @@ class AutoMapGraph:
             if not self._can_move_roundabout(pos, next_pos):
                 continue
 
-            total_cost = self.map_data.movement_cost(next_pos) * move_cost
+            cell_cost = self.map_data.movement_cost(next_pos)
+            if next_pos in self.trap_cells:
+                cell_cost = max(cell_cost, 50.0)
+
+            total_cost = cell_cost * move_cost
             neighbors.append((next_pos, total_cost))
 
         return neighbors

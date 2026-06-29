@@ -72,6 +72,7 @@ CSV_FIELDS = [
     "algorithm",
     "total_score",
     "total_distance",
+    "total_orders",
     "completed_orders",
     "expanded_nodes",
     "runtime_ms",
@@ -158,6 +159,7 @@ def write_representative_csv(
                     "algorithm": representative.algorithm,
                     "total_score": round(result.total_score, 4),
                     "total_distance": round(result.total_distance, 4),
+                    "total_orders": result.total_orders,
                     "completed_orders": result.completed_orders,
                     "expanded_nodes": result.expanded_nodes,
                     "runtime_ms": round(result.runtime_ms, 4),
@@ -180,7 +182,7 @@ def print_representative_summary(
             f"- Group {representative.group_id} | {representative.algorithm}: "
             f"score={round(result.total_score, 2)}, "
             f"distance={round(result.total_distance, 2)}, "
-            f"completed={result.completed_orders}/6, "
+            f"completed={result.completed_orders}/{result.total_orders or result.completed_orders}, "
             f"expanded={result.expanded_nodes}, "
             f"runtime_ms={round(result.runtime_ms, 4)}"
         )

@@ -62,8 +62,9 @@ class GameplayControllerMixin:
             raw_pos = self.npc_spawns[i] if i < len(self.npc_spawns) else default_positions[i]
             pos = self._nearest_walkable(raw_pos)
 
-            npc = DirectionalShipper(f"NPC {i + 1}", pos, npc_sprites, TILE_SIZE)
-            npc.algorithm = algorithms[i]
+            algorithm = algorithms[i]
+            npc = DirectionalShipper(algorithm, pos, npc_sprites, TILE_SIZE)
+            npc.algorithm = algorithm
             npc.allow_diagonal = self._allow_diagonal_movement()
             npc.configure_roundabout(
                 self._roundabout_center(),

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<map version="1.10" tiledversion="1.12.2" orientation="orthogonal" renderorder="right-down" width="48" height="32" tilewidth="32" tileheight="32" infinite="0" nextlayerid="14" nextobjectid="86">
+<map version="1.10" tiledversion="1.12.2" orientation="orthogonal" renderorder="right-down" width="48" height="32" tilewidth="32" tileheight="32" infinite="0" nextlayerid="14" nextobjectid="91">
  <tileset firstgid="1" source="road_tiles.tsx"/>
  <tileset firstgid="2" source="collision_tiles.tsx"/>
  <imagelayer id="5" name="Background" locked="1">
@@ -120,8 +120,11 @@
   <object id="62" name="house_30" type="DeliveryPoint" x="928" y="480" width="32" height="32"/>
   <object id="66" name="house_32" type="DeliveryPoint" x="992" y="960" width="31.5" height="32.5"/>
   <object id="72" name="house_38" type="DeliveryPoint" x="1312" y="96" width="32" height="32"/>
-  <object id="83" name="NPC1" type="NPC" x="864" y="416" width="32" height="32"/>
-  <object id="84" name="NPC2" type="NPC" x="864" y="416" width="32" height="32"/>
-  <object id="85" name="NPC3" type="NPC" x="864" y="416" width="32" height="32"/>
- </objectgroup>
+  <object id="83" name="algorithm_spawn_1" type="NPC" x="864" y="416" width="32" height="32"/>
+  <object id="84" name="algorithm_spawn_2" type="NPC" x="864" y="416" width="32" height="32"/>
+  <object id="85" name="algorithm_spawn_3" type="NPC" x="864" y="416" width="32" height="32"/>
+  <object id="86" name="traffic_trap_1" type="TrafficTrap" x="544" y="416" width="32" height="32"/>
+  <object id="87" name="traffic_trap_2" type="TrafficTrap" x="96" y="320" width="32" height="32"/>
+  <object id="88" name="traffic_trap_3" type="TrafficTrap" x="256" y="128" width="32" height="32"/>
+</objectgroup>
 </map>

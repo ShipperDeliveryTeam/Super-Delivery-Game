@@ -126,7 +126,10 @@ class GameRendererMixin:
 
         self._draw_static_icons()
 
-        if self.simulation_mode or self.settings.show_path_hint:
+        if (
+            (self.simulation_mode and not getattr(self, "auto_visual_enabled", False))
+            or (not self.simulation_mode and self.settings.show_path_hint)
+        ):
             self._draw_paths()
 
         if not self.simulation_mode and self.player:
@@ -155,8 +158,10 @@ class GameRendererMixin:
         bounce_offset = abs(math.sin(time_ticks * 0.005)) * 10  # Jump height up to 10 pixels
 
         if self.simulation_mode and getattr(self, "auto_visual_enabled", False):
-            if hasattr(self, "_draw_auto_visual_locations"):
-                self._draw_auto_visual_locations(bounce_offset)
+            if hasattr(self, "_draw_auto_visual_hidden_traps"):
+                self._draw_auto_visual_hidden_traps(bounce_offset)
+            if hasattr(self, "_draw_auto_visual_current_targets"):
+                self._draw_auto_visual_current_targets(bounce_offset)
             return
 
         if not self.simulation_mode:
@@ -173,13 +178,30 @@ class GameRendererMixin:
 
         # Draw for NPCs
         if hasattr(self, 'npc_tasks'):
+            markers_by_target = {}
             for i, npc in enumerate(self.npc_shippers):
                 task = self.npc_tasks.get(npc.name)
-                if task and not task.delivered:
-                    icon_name = f"location_npc{i + 1}"
-                    if icon_name not in self.icons:
-                        icon_name = "location_npc1" # Fallback
-                    self._draw_bouncing_location(icon_name, task.target_pos, bounce_offset)
+                if not task or task.delivered:
+                    continue
+
+                target_pos = tuple(task.target_pos)
+                if not self._should_draw_shipper_target_marker(npc, target_pos):
+                    continue
+
+                icon_name = f"location_npc{i + 1}"
+                if icon_name not in self.icons:
+                    icon_name = "location_npc1" # Fallback
+
+                markers_by_target.setdefault(target_pos, []).append(icon_name)
+
+            for target_pos, icon_names in markers_by_target.items():
+                for index, icon_name in enumerate(icon_names):
+                    self._draw_bouncing_location(
+                        icon_name,
+                        target_pos,
+                        bounce_offset,
+                        self._target_marker_offset(index, len(icon_names)),
+                    )
 
     def _draw_player_offer_markers(self, bounce_offset: float) -> None:
         offers = [
@@ -213,7 +235,30 @@ class GameRendererMixin:
                 self._draw_text(label, self.font_tiny, (9, 27, 50), target_center[0] + 1, target_center[1] - 6, center=True)
                 self._draw_text(label, self.font_tiny, (255, 255, 255), target_center[0], target_center[1] - 7, center=True)
 
-    def _draw_bouncing_location(self, icon_name: str, grid_pos: Tuple[int, int], bounce_offset: float) -> None:
+    def _should_draw_shipper_target_marker(self, shipper, target_pos: Tuple[int, int]) -> bool:
+        return tuple(getattr(shipper, "grid_pos", target_pos)) != target_pos
+
+    def _target_marker_offset(self, index: int, total: int) -> tuple[int, int]:
+        if total <= 1:
+            return (0, 0)
+
+        offsets = [
+            (-24, 0),
+            (24, 0),
+            (0, -18),
+            (-38, -12),
+            (38, -12),
+            (0, 18),
+        ]
+        return offsets[index % len(offsets)]
+
+    def _draw_bouncing_location(
+        self,
+        icon_name: str,
+        grid_pos: Tuple[int, int],
+        bounce_offset: float,
+        marker_offset: tuple[int, int] = (0, 0),
+    ) -> None:
         icon = self.icons.get(icon_name)
         if not icon:
             return
@@ -224,8 +269,9 @@ class GameRendererMixin:
         scale = 1.6; icon_w = max(1, int(icon.get_width() * scale)); icon_h = max(1, int(icon.get_height() * scale))
         icon = pygame.transform.smoothscale(icon, (icon_w, icon_h))
 
-        draw_x = x + (cell_w - icon_w) // 2
-        draw_y = y + (cell_h - icon_h) // 2 - int(bounce_offset) - (icon_h // 4)
+        offset_x, offset_y = marker_offset
+        draw_x = x + (cell_w - icon_w) // 2 + offset_x
+        draw_y = y + (cell_h - icon_h) // 2 - int(bounce_offset) - (icon_h // 4) + offset_y
 
         self.screen.blit(icon, (draw_x, draw_y))
 
@@ -240,7 +286,8 @@ class GameRendererMixin:
         else:
             x, y = self._grid_to_screen(shipper.grid_pos)
 
-        scale = 1.35; draw_w = max(1, int(cell_w * scale)); draw_h = max(1, int(cell_h * scale))
+        scale = 1.65 if self.simulation_mode and getattr(self, "auto_visual_enabled", False) else 1.35
+        draw_w = max(1, int(cell_w * scale)); draw_h = max(1, int(cell_h * scale))
         if sprite.get_width() != draw_w or sprite.get_height() != draw_h:
             sprite = pygame.transform.smoothscale(sprite, (draw_w, draw_h))
 
@@ -251,17 +298,12 @@ class GameRendererMixin:
             offset_x, offset_y = getattr(shipper, "auto_visual_offset", (0, 0))
             draw_x += offset_x
             draw_y += offset_y
-            color = getattr(shipper, "auto_visual_color", (255, 220, 80))
-            center = (draw_x + draw_w // 2, draw_y + draw_h - max(4, draw_h // 8))
-            pygame.draw.circle(self.screen, (20, 20, 24), center, max(12, draw_w // 2 + 5))
-            pygame.draw.circle(self.screen, color, center, max(10, draw_w // 2 + 2), width=4)
 
         self.screen.blit(sprite, (draw_x, draw_y))
 
         if self.simulation_mode and getattr(self, "auto_visual_enabled", False):
             color = getattr(shipper, "auto_visual_color", (255, 220, 80))
-            npc_index = int(getattr(shipper, "auto_visual_index", 0)) + 1
-            label = f"NPC {npc_index}"
+            label = str(getattr(shipper, "algorithm", shipper.name))
             text = self.font_tiny_bold.render(label, True, (255, 255, 255))
             badge = pygame.Rect(0, 0, text.get_width() + 12, text.get_height() + 6)
             badge.centerx = draw_x + draw_w // 2

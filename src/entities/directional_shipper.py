@@ -43,7 +43,7 @@ class DirectionalShipper:
                     self.speed_px = float(arg)
 
         # Keep movement readable but not sluggish.
-        self.speed_px = max(70.0, min(float(self.speed_px), 150.0))
+        self.speed_px = max(70.0, min(float(self.speed_px), 280.0))
 
         self._grid_pos = (int(grid_pos[0]), int(grid_pos[1]))
         self.target_grid_pos = self._grid_pos

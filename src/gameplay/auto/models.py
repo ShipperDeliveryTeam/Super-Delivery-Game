@@ -106,4 +106,5 @@ class RunResult:
     memory_kb: float
     replan_count: int
     trap_hits: int
+    total_orders: int = 0
     rank: int = 0

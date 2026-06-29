@@ -14,7 +14,7 @@ MAP1_PROFILE = AutoMapProfile(
     tmx_path=PROJECT_ROOT / "maps" / "auto" / "map1" / "map1_auto.tmx",
     image_path=PROJECT_ROOT / "assets" / "images" / "map" / "map1.png",
 
-    order_count=6,
+    order_count=2,
     capacity=1,
     deadline_seconds=240.0,
     traffic_delay_seconds=2.0,

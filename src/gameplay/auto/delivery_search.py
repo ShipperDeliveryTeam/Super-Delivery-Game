@@ -47,8 +47,8 @@ def house_name(order: AutoOrder) -> str:
 
 
 def make_state(map_data: AutoMapData, orders: list[AutoOrder], trap_cells=()) -> MatrixState:
-    traps = {obj.grid_pos for obj in map_data.traffic_traps + map_data.block_traps}
-    traps.update(trap_cells)
+    explicit_traps = {tuple(pos) for pos in trap_cells}
+    traps = explicit_traps or {obj.grid_pos for obj in map_data.traffic_traps + map_data.block_traps}
     stores = {order.store_pos for order in orders}
     houses = {order.customer_pos for order in orders}
     rows: list[list[str]] = []

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<map version="1.10" tiledversion="1.12.2" orientation="orthogonal" renderorder="right-down" width="48" height="32" tilewidth="32" tileheight="32" infinite="0" nextlayerid="10" nextobjectid="86">
+<map version="1.10" tiledversion="1.12.2" orientation="orthogonal" renderorder="right-down" width="48" height="32" tilewidth="32" tileheight="32" infinite="0" nextlayerid="10" nextobjectid="91">
  <tileset firstgid="1" source="road_tiles.tsx"/>
  <tileset firstgid="2" source="collision_tiles.tsx"/>
  <tileset firstgid="3" source="../../../../Tiled/map4/collision_tiles.tsx"/>
@@ -210,8 +210,13 @@
   <object id="80" name="house_45" type="DeliveryPoint" x="1440" y="256" width="32" height="32"/>
   <object id="81" name="house_46" type="DeliveryPoint" x="1440" y="128" width="32" height="32"/>
   <object id="82" name="player_spawn" type="Player" x="864" y="416" width="32" height="32"/>
-  <object id="83" name="NPC1" type="NPC" x="864" y="416" width="32" height="32"/>
-  <object id="84" name="NPC2" type="NPC" x="864" y="416" width="32" height="32"/>
-  <object id="85" name="NPC3" type="NPC" x="864" y="416" width="32" height="32"/>
- </objectgroup>
+  <object id="83" name="BFS_spawn" type="NPC" x="864" y="416" width="32" height="32"/>
+  <object id="84" name="ASTAR_spawn" type="NPC" x="864" y="416" width="32" height="32"/>
+  <object id="85" name="Q_LEARNING_spawn" type="NPC" x="864" y="416" width="32" height="32"/>
+  <object id="86" name="traffic_trap_1" type="TrafficTrap" x="544" y="416" width="32" height="32"/>
+  <object id="87" name="traffic_trap_2" type="TrafficTrap" x="544" y="800" width="32" height="32"/>
+  <object id="88" name="traffic_trap_3" type="TrafficTrap" x="768" y="320" width="32" height="32"/>
+  <object id="89" name="traffic_trap_4" type="TrafficTrap" x="800" y="800" width="32" height="32"/>
+  <object id="90" name="traffic_trap_5" type="TrafficTrap" x="1056" y="128" width="32" height="32"/>
+</objectgroup>
 </map>

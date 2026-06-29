@@ -76,6 +76,7 @@ def _build_pathfinding_plan(
     group_id: int,
     group_name: str,
     algorithm: str,
+    visual_traps: tuple[GridPos, ...] = (),
 ) -> AutoVisualAgentPlan:
     started_at = perf_counter()
     map_data = load_auto_map(map_id)
@@ -85,6 +86,7 @@ def _build_pathfinding_plan(
         map_data=map_data,
         orders=orders,
         algorithm=algorithm,
+        trap_cells=visual_traps,
     )
 
     note = "Delivery-state search"
@@ -109,6 +111,7 @@ def _build_local_search_plan(
     group_id: int,
     group_name: str,
     algorithm: str,
+    visual_traps: tuple[GridPos, ...] = (),
 ) -> AutoVisualAgentPlan:
     started_at = perf_counter()
     map_data = load_auto_map(map_id)
@@ -118,6 +121,7 @@ def _build_local_search_plan(
         map_data=map_data,
         orders=orders,
         algorithm=algorithm,
+        trap_cells=visual_traps,
     )
 
     note = "Local path search by 4 directions"
@@ -142,12 +146,14 @@ def _build_complex_astar_plan(
     group_id: int,
     group_name: str,
     algorithm: str,
+    visual_traps: tuple[GridPos, ...] = (),
 ) -> AutoVisualAgentPlan:
     started_at = perf_counter()
     map_data = load_auto_map(map_id)
     orders = load_orders_for_map(map_id)
     order_ids = [order.id for order in orders]
     trap_setup = build_trap_setup(map_data, orders, algorithm)
+    active_traps = tuple(visual_traps or trap_setup.traps)
 
     if algorithm == "NO_OBSERVATION":
         complex_result = no_observation_search(
@@ -181,7 +187,7 @@ def _build_complex_astar_plan(
                 map_data=map_data,
                 orders=orders,
                 algorithm="ASTAR",
-                trap_cells=belief.traps,
+                trap_cells=active_traps,
             )
             if alt_result.path and len(alt_result.actions) == len(orders) * 2:
                 alt_path = tuple(alt_result.path)
@@ -210,7 +216,7 @@ def _build_complex_astar_plan(
                 map_data=map_data,
                 orders=orders,
                 algorithm="ASTAR",
-                trap_cells=trap_cells,
+                trap_cells=active_traps,
             )
             if alt_result.path and len(alt_result.actions) == len(orders) * 2:
                 alt_path = tuple(alt_result.path)
@@ -224,7 +230,7 @@ def _build_complex_astar_plan(
             map_data=map_data,
             orders=orders,
             algorithm="ASTAR",
-            trap_cells=(),
+            trap_cells=active_traps,
         )
         if safe_result.path and len(safe_result.actions) == len(orders) * 2:
             alternative_paths.append(tuple(safe_result.path))
@@ -234,7 +240,7 @@ def _build_complex_astar_plan(
         map_data=map_data,
         orders=orders,
         algorithm="ASTAR",
-        trap_cells=astar_traps,
+        trap_cells=active_traps,
     )
 
     if algorithm == "AND_OR_SEARCH" and len(result.actions) == len(orders) * 2:
@@ -270,7 +276,7 @@ def _build_complex_astar_plan(
         expanded_nodes=complex_result.expanded_nodes + result.expanded_nodes,
         runtime_ms=(perf_counter() - started_at) * 1000,
         note=note,
-        hidden_traps=trap_setup.traps,
+        hidden_traps=active_traps,
         belief_traps=astar_traps,
         belief_states=tuple(belief.traps for belief in complex_result.belief_states),
         known_traps=complex_result.known_traps,
@@ -423,6 +429,7 @@ def build_auto_visual_plans(
     map_id: int,
     group_id: int = 1,
     visual_safe: bool = True,
+    visual_traps: tuple[GridPos, ...] = (),
 ) -> list[AutoVisualAgentPlan]:
     group_id = int(group_id)
     algorithms = get_algorithms_by_group(group_id)
@@ -431,16 +438,21 @@ def build_auto_visual_plans(
         raise ValueError(f"Invalid visual group: {group_id}")
 
     group_name = get_group_name(group_id)
-    matrix = build_route_cost_matrix(map_id=map_id, algorithm="ASTAR")
+    if not visual_traps:
+        map_data = load_auto_map(map_id)
+        orders = load_orders_for_map(map_id)
+        visual_traps = build_trap_setup(map_data, orders, "VISUAL").traps
+
+    matrix = build_route_cost_matrix(map_id=map_id, algorithm="ASTAR", trap_cells=visual_traps)
     plans: list[AutoVisualAgentPlan] = []
 
     for algorithm in algorithms:
         if group_id in (1, 2):
-            plans.append(_build_pathfinding_plan(map_id, group_id, group_name, algorithm))
+            plans.append(_build_pathfinding_plan(map_id, group_id, group_name, algorithm, visual_traps))
         elif algorithm in ("SIMPLE_HILL", "STEEPEST_HILL", "LOCAL_BEAM"):
-            plans.append(_build_local_search_plan(map_id, group_id, group_name, algorithm))
+            plans.append(_build_local_search_plan(map_id, group_id, group_name, algorithm, visual_traps))
         elif algorithm in ("NO_OBSERVATION", "PARTIAL_OBSERVATION", "AND_OR_SEARCH"):
-            plans.append(_build_complex_astar_plan(map_id, group_id, group_name, algorithm))
+            plans.append(_build_complex_astar_plan(map_id, group_id, group_name, algorithm, visual_traps))
         elif algorithm == "BACKTRACKING":
             plans.append(_build_backtracking_plan(map_id, group_id, group_name, matrix))
         elif algorithm == "FORWARD_CHECKING":

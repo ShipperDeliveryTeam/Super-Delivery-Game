@@ -45,7 +45,7 @@ def _get_reward_from_pickup(pickup: TmxObject, fallback_reward: int) -> int:
 
 def build_orders_from_auto_map(map_data: AutoMapData) -> list[AutoOrder]:
     """
-    Tạo 6 đơn cố định từ TMX Auto.
+    Tạo số đơn cố định từ TMX Auto theo cấu hình map.
 
     Cách ghép hiện tại:
     - PickupPoint được sắp theo object id tăng dần.
@@ -61,7 +61,7 @@ def build_orders_from_auto_map(map_data: AutoMapData) -> list[AutoOrder]:
 
     order_count = min(config.order_count, len(pickup_points), len(delivery_points))
 
-    # Mỗi lần load map, 6 cửa hàng được ghép ngẫu nhiên với 6 nhà.
+    # Mỗi lần load map, các cửa hàng được ghép ngẫu nhiên với các nhà.
     # Seed theo map_id để các thuật toán trong cùng một nhóm dùng chung môi trường.
     rng = random.Random(map_data.map_id * 1000 + 2026)
     delivery_points = list(delivery_points[:order_count])

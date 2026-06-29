@@ -27,6 +27,7 @@ class DeliveryStep:
 class DeliveryPlanResult:
     map_id: int
     algorithm: str
+    total_orders: int
     completed_orders: int
     total_cost: float
     total_steps: int
@@ -37,7 +38,7 @@ class DeliveryPlanResult:
 
     @property
     def success(self) -> bool:
-        return self.completed_orders > 0 and self.completed_orders == 6
+        return self.total_orders > 0 and self.completed_orders >= self.total_orders
 
 
 class AutoPlanner:
@@ -72,7 +73,7 @@ class AutoPlanner:
         Chiến lược:
         - Đi theo thứ tự đơn cố định từ TMX.
         - Mỗi đơn: đi tới store để nhận, sau đó đi tới customer để giao.
-        - Mục tiêu bước này là kiểm tra thuật toán pathfinding chạy được đủ 6 đơn.
+        - Mục tiêu bước này là kiểm tra thuật toán pathfinding chạy được đủ các đơn đang bật.
         """
         current_pos = self.map_data.start_position
 
@@ -149,6 +150,7 @@ class AutoPlanner:
         return DeliveryPlanResult(
             map_id=self.map_data.map_id,
             algorithm=self.algorithm,
+            total_orders=len(orders),
             completed_orders=completed_orders,
             total_cost=total_cost,
             total_steps=total_path_steps,

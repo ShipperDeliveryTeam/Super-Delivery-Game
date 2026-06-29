@@ -139,8 +139,8 @@ class MenuMixin:
         self.map_prev_button_rect = pygame.Rect(panel.x + 210, panel.y + 4, 54, 54)
         self.map_next_button_rect = pygame.Rect(panel.x + 362, panel.y + 4, 54, 54)
 
-        self._draw_text_button(self.map_prev_button_rect, "‹", (65, 180, 85))
-        self._draw_text_button(self.map_next_button_rect, "›", (65, 180, 85))
+        self._draw_image_button(getattr(self, "ui_left_button", None), self.map_prev_button_rect, "‹", (65, 180, 85))
+        self._draw_image_button(getattr(self, "ui_right_button", None), self.map_next_button_rect, "›", (65, 180, 85))
 
         map_num_text = f"{self.settings.selected_map_id:02d}"
         self._draw_text(map_num_text, self.font_mid, (255, 255, 255), panel.x + 316, title_y, center=True)
@@ -261,6 +261,14 @@ class MenuMixin:
             return
 
         if self.state == GameState.SIMULATION:
+            if self._game_sound_rect and self._game_sound_rect.collidepoint(pos):
+                self.settings.toggle_sound()
+                return
+
+            if self._game_pause_rect and self._game_pause_rect.collidepoint(pos):
+                self.state = GameState.PAUSED
+                return
+
             if hasattr(self, "_handle_auto_visual_mouse_click"):
                 handled = self._handle_auto_visual_mouse_click(pos)
                 if handled:

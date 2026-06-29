@@ -4,9 +4,15 @@ import random
 from src.core.game_state import GameState
 from src.core.constants import NPC_COLORS, TILE_SIZE
 from src.entities.directional_shipper import DirectionalShipper
+from src.gameplay.auto.complex_traps import build_trap_setup
 from src.gameplay.auto.order_factory import load_orders_for_map
+from src.gameplay.auto.maps.tmx_loader import load_auto_map
 from src.gameplay.auto.visualizer import AutoVisualAgentPlan, build_auto_visual_plans
+from src.gameplay.roundabout_geometry import build_roundabout_curve
 from src.systems.asset_paths import get_npc_sprite_paths
+
+
+AUTO_VISUAL_SHIPPER_SPEED = 260.0
 
 
 class AutoModeMixin:
@@ -66,14 +72,22 @@ class AutoModeMixin:
         self.auto_visual_finished = False
         self.auto_visual_error = ""
         self.auto_visual_plan_building = True
+        self.auto_visual_trap_setup = None
 
         try:
             self.auto_visual_orders = load_orders_for_map(self.settings.selected_map_id)
+            self.auto_visual_map_data = load_auto_map(self.settings.selected_map_id)
+            self.auto_visual_trap_setup = build_trap_setup(
+                self.auto_visual_map_data,
+                self.auto_visual_orders,
+                "VISUAL",
+            )
             group_id = int(getattr(self, "auto_visual_group_id", 1))
             plans = build_auto_visual_plans(
                 map_id=self.settings.selected_map_id,
                 group_id=group_id,
                 visual_safe=True,
+                visual_traps=self.auto_visual_trap_setup.traps,
             )
         except Exception as exc:
             self.auto_visual_error = f"Không tạo được Auto visual demo: {exc}"
@@ -97,8 +111,9 @@ class AutoModeMixin:
         self.npc_tasks = {}
         self.npc_expanded = {}
 
-        for plan in plans:
-            self.auto_visual_hidden_traps.update(getattr(plan, "hidden_traps", ()))
+        trap_setup = getattr(self, "auto_visual_trap_setup", None)
+        if trap_setup is not None:
+            self.auto_visual_hidden_traps.update(getattr(trap_setup, "traps", ()))
 
         visual_colors = [
             (255, 80, 80),    # shipper 1 - đỏ
@@ -130,16 +145,19 @@ class AutoModeMixin:
                 f"{plan.algorithm}",
                 start_pos,
                 sprites,
-                TILE_SIZE,
+                tile_size=TILE_SIZE,
+                speed_px=AUTO_VISUAL_SHIPPER_SPEED,
             )
             npc.algorithm = plan.algorithm
             npc.auto_visual_index = index
             npc.auto_visual_color = visual_colors[index % len(visual_colors)]
             npc.auto_visual_offset = visual_offsets[index % len(visual_offsets)]
-            npc.auto_visual_alternative_paths = [list(item) for item in getattr(plan, "alternative_paths", ())]
+            npc.auto_visual_alternative_paths = [
+                self._expand_auto_visual_render_path(item)
+                for item in getattr(plan, "alternative_paths", ())
+            ]
             npc.auto_visual_alternative_actions = [tuple(item) for item in getattr(plan, "alternative_actions", ())]
             npc.allow_diagonal = self._allow_diagonal_movement()
-            npc.speed_px = 180.0
             npc.configure_roundabout(
                 self._roundabout_center(),
                 self._roundabout_ring(),
@@ -147,11 +165,66 @@ class AutoModeMixin:
             )
 
             self.npc_shippers.append(npc)
-            self.npc_paths[npc.name] = list(plan.path[1:])
+            render_path = self._expand_auto_visual_render_path(plan.path)
+            self.npc_paths[npc.name] = list(render_path[1:])
             self.npc_expanded[npc.name] = plan.expanded_nodes
             self.auto_visual_targets[npc.name] = self._auto_visual_action_targets(plan.actions)
             self.auto_visual_path_index[npc.name] = 0
             self.auto_visual_completed[npc.name] = False
+            npc.auto_visual_total_orders = plan.completed_orders
+            npc.auto_visual_trap_hits = 0
+
+    def _expand_auto_visual_render_path(self, path: list[tuple[int, int]] | tuple[tuple[int, int], ...]) -> list[tuple[int, int]]:
+        """Use axis-aligned display steps for normal diagonal auto path edges."""
+        points = [tuple(pos) for pos in path]
+        if len(points) <= 1:
+            return points
+
+        expanded = [points[0]]
+        previous_delta = (0, 0)
+
+        for target in points[1:]:
+            current = expanded[-1]
+            dx = target[0] - current[0]
+            dy = target[1] - current[1]
+
+            if abs(dx) == 1 and abs(dy) == 1 and not self._auto_visual_keep_diagonal_edge(current, target):
+                candidates = [
+                    ((current[0] + dx, current[1]), (dx, 0)),
+                    ((current[0], current[1] + dy), (0, dy)),
+                ]
+                candidates.sort(key=lambda item: 0 if item[1] == previous_delta else 1)
+
+                for middle, middle_delta in candidates:
+                    if self._auto_visual_can_render_step(middle):
+                        expanded.append(middle)
+                        previous_delta = middle_delta
+                        break
+
+            if expanded[-1] != target:
+                previous_delta = (target[0] - expanded[-1][0], target[1] - expanded[-1][1])
+                expanded.append(target)
+
+        return expanded
+
+    def _auto_visual_keep_diagonal_edge(self, start: tuple[int, int], end: tuple[int, int]) -> bool:
+        return bool(
+            build_roundabout_curve(
+                start,
+                end,
+                self._roundabout_center(),
+                self._roundabout_ring(),
+                self._roundabout_connections(),
+            )
+        )
+
+    def _auto_visual_can_render_step(self, pos: tuple[int, int]) -> bool:
+        map_data = getattr(self, "auto_visual_map_data", None)
+        if map_data is not None:
+            return bool(map_data.is_walkable(pos))
+
+        x, y = pos
+        return 0 <= y < len(self.grid_matrix) and 0 <= x < len(self.grid_matrix[y])
 
     def _auto_visual_action_targets(self, actions: tuple[str, ...]) -> list[tuple[str, tuple[int, int]]]:
         orders = {order.id: order for order in getattr(self, "auto_visual_orders", [])}
@@ -252,6 +325,12 @@ class AutoModeMixin:
 
             path = self.npc_paths.get(npc.name, [])
             base_pos = self._movement_base_pos(npc)
+            npc_is_between_cells = bool(getattr(npc, "is_moving", False))
+
+            if npc_is_between_cells:
+                all_done = False
+                continue
+
             if self._check_auto_visual_hidden_trap(npc, base_pos):
                 all_done = False
                 continue
@@ -262,16 +341,8 @@ class AutoModeMixin:
 
             if not path:
                 self.auto_visual_completed[npc.name] = True
-                npc.orders = 6
+                npc.orders = int(getattr(npc, "auto_visual_total_orders", len(getattr(self, "auto_visual_orders", []))))
                 continue
-
-            next_pos = path[0]
-            if getattr(npc, "algorithm", "") == "AND_OR_SEARCH" and next_pos in getattr(self, "auto_visual_hidden_traps", set()):
-                if self._and_or_replan_if_trap_ahead(npc, base_pos, next_pos, path):
-                    all_done = False
-                    continue
-                # Neu khong co plan nao ne duoc bay nay thi cu di tiep,
-                # de phan xu ly bay giu 5 giay roi chay tiep binh thuong.
 
             next_pos = path[0]
             dx = next_pos[0] - base_pos[0]
@@ -308,11 +379,13 @@ class AutoModeMixin:
         waits = getattr(self, "auto_visual_trap_wait_until", {})
         waits[npc.name] = float(getattr(self, "elapsed_time", 0.0)) + 5.0
         self.auto_visual_trap_wait_until = waits
+        npc.auto_visual_trap_hits = int(getattr(npc, "auto_visual_trap_hits", 0)) + 1
         return True
 
     def _draw_auto_visual_locations(self, bounce_offset: float) -> None:
-        """Vẽ pickup/delivery của 6 đơn trong Auto TMX."""
+        """Draw pickup/delivery markers for the active Auto orders."""
         try:
+            # pyrefly: ignore [missing-import]
             import pygame
         except Exception:
             return
@@ -338,6 +411,7 @@ class AutoModeMixin:
 
     def _draw_auto_visual_hidden_traps(self, bounce_offset: float) -> None:
         try:
+            # pyrefly: ignore [missing-import]
             import pygame
         except Exception:
             return
@@ -352,20 +426,26 @@ class AutoModeMixin:
             cx = sx + cell_w // 2
             cy = sy + cell_h // 2 - int(bounce_offset * 0.25)
 
-            if pos in revealed:
-                if trap_icon:
-                    rect = trap_icon.get_rect(center=(cx, cy))
-                    self.screen.blit(trap_icon, rect)
-                else:
-                    pygame.draw.circle(self.screen, (230, 55, 55), (cx, cy), 11)
-                    self._draw_text("!", self.font_tiny_bold, (255, 255, 255), cx, cy - 8, center=True)
+            if trap_icon:
+                scale = 1.75
+                trap_size = (
+                    max(1, int(cell_w * scale)),
+                    max(1, int(cell_h * scale)),
+                )
+                icon = pygame.transform.smoothscale(trap_icon, trap_size)
+                rect = icon.get_rect(center=(cx, cy))
+                self.screen.blit(icon, rect)
+
+                if pos in revealed:
+                    pygame.draw.circle(self.screen, (255, 60, 45), (cx, cy), max(12, trap_size[0] // 2), 3)
             else:
-                pygame.draw.circle(self.screen, (40, 80, 120), (cx, cy), 11)
-                pygame.draw.circle(self.screen, (255, 230, 90), (cx, cy), 11, 2)
-                self._draw_text("?", self.font_tiny_bold, (255, 255, 255), cx, cy - 8, center=True)
+                pygame.draw.circle(self.screen, (230, 55, 55), (cx, cy), 14)
+                pygame.draw.circle(self.screen, (20, 20, 20), (cx, cy), 14, 2)
+                self._draw_text("!", self.font_tiny_bold, (255, 255, 255), cx, cy - 8, center=True)
 
     def _draw_auto_visual_current_targets(self, bounce_offset: float) -> None:
         try:
+            # pyrefly: ignore [missing-import]
             import pygame
         except Exception:
             return
@@ -373,28 +453,49 @@ class AutoModeMixin:
         targets_by_name = getattr(self, "auto_visual_targets", {})
         cell_w, cell_h = self._cell_size_screen()
 
+        markers_by_target = {}
         for npc in getattr(self, "npc_shippers", []):
             targets = targets_by_name.get(npc.name, [])
             if not targets:
                 continue
 
-            target_kind, target_pos = targets[0]
+            _target_kind, target_pos = targets[0]
+            target_pos = tuple(target_pos)
+            if hasattr(self, "_should_draw_shipper_target_marker") and not self._should_draw_shipper_target_marker(npc, target_pos):
+                continue
+
+            markers_by_target.setdefault(target_pos, []).append(npc)
+
+        for target_pos, npcs in markers_by_target.items():
             sx, sy = self._grid_to_screen(target_pos)
-            cx = sx + cell_w // 2
-            cy = sy + cell_h // 2 - int(12 + bounce_offset * 0.5)
 
-            icon_key = f"location_npc{getattr(npc, 'auto_visual_index', 0) + 1}"
-            icon = getattr(self, "icons", {}).get(icon_key)
-            if icon:
-                rect = icon.get_rect(center=(cx, cy))
-                self.screen.blit(icon, rect)
-            else:
-                color = getattr(npc, "auto_visual_color", (255, 220, 80))
-                pygame.draw.circle(self.screen, color, (cx, cy), 12)
-                pygame.draw.circle(self.screen, (20, 20, 20), (cx, cy), 12, 2)
+            for index, npc in enumerate(npcs):
+                offset_x, offset_y = (
+                    self._target_marker_offset(index, len(npcs))
+                    if hasattr(self, "_target_marker_offset")
+                    else (0, 0)
+                )
+                cx = sx + cell_w // 2 + offset_x
+                cy = sy + cell_h // 2 - int(bounce_offset * 0.45) + offset_y
 
-            label = "S" if target_kind == "store" else "H"
-            self._draw_text(label, self.font_tiny_bold, (255, 255, 255), cx, cy - 8, center=True)
+                icon_key = f"location_npc{getattr(npc, 'auto_visual_index', 0) + 1}"
+                icon = getattr(self, "icons", {}).get(icon_key)
+                if icon:
+                    scale = 1.45
+                    icon = pygame.transform.smoothscale(
+                        icon,
+                        (
+                            max(1, int(icon.get_width() * scale)),
+                            max(1, int(icon.get_height() * scale)),
+                        ),
+                    )
+                    rect = icon.get_rect()
+                    rect.midbottom = (cx, cy)
+                    self.screen.blit(icon, rect)
+                else:
+                    color = getattr(npc, "auto_visual_color", (255, 220, 80))
+                    pygame.draw.circle(self.screen, color, (cx, cy), 17)
+                    pygame.draw.circle(self.screen, (20, 20, 20), (cx, cy), 17, 2)
 
     def _handle_auto_visual_mouse_click(self, pos: tuple[int, int]) -> bool:
         """Auto visual group is selected from the main menu level picker."""

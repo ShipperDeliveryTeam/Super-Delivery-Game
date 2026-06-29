@@ -26,7 +26,7 @@ def test_planner_on_map(map_id: int) -> None:
 
         print(
             f"- {algorithm}: {status}, "
-            f"completed={result.completed_orders}/6, "
+            f"completed={result.completed_orders}/{result.total_orders}, "
             f"total_cost={round(result.total_cost, 2)}, "
             f"total_steps={result.total_steps}, "
             f"expanded={result.expanded_nodes}, "
