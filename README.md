@@ -40,6 +40,7 @@ Phần này dùng các GIF preview nhẹ trong `docs/readme-gifs` để mô ph�
 | 6 | ![Nhóm 6](docs/readme-gifs/2_nhom6.gif) |
 
 ### Map3
+
 | Nhóm | Map3 |
 |---:|---|
 | 1 | ![Nhóm 1](docs/readme-gifs/3_nhom1.gif) |
