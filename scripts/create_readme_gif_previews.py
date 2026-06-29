@@ -30,11 +30,11 @@ GIF_NAMES = [
 ]
 
 
-MAX_WIDTH = 480
-MAX_FRAMES = 48
+MAX_WIDTH = 420
+MAX_FRAMES = 24
 MAX_SOURCE_FRAMES = 260
-FRAME_DURATION_MS = 110
-COLORS = 96
+FRAME_DURATION_MS = 160
+COLORS = 64
 
 
 def resize_frame(frame: Image.Image) -> Image.Image:
