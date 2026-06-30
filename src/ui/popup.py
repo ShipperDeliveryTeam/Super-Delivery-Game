@@ -1,32 +1,8 @@
 from __future__ import annotations
 
-import random
-from pathlib import Path
-from typing import List, Optional, Tuple
-
 import pygame
 
-from src.core.constants import (
-    BACKGROUND_COLOR,
-    GRID_LINE_COLOR,
-    TEXT_COLOR,
-    PLAYER_COLOR,
-    NPC_COLORS,
-    SCREEN_WIDTH,
-    SCREEN_HEIGHT,
-    TILE_SIZE,
-    GRID_COLS,
-    GRID_ROWS,
-    GAME_TITLE,
-)
-from src.core.game_state import GameState
-from src.ai.game_pathfinder import GamePathfinder
-from src.gameplay.delivery_task import DeliveryTask
-from src.gameplay.order_generator import OrderGenerator
-from src.gameplay.roundabout_geometry import build_roundabout_curve, curve_point
-from src.systems.stats_logger import StatsLogger, GameStatsRecord
-from src.systems.asset_paths import get_ui_asset_path
-from src.entities.directional_shipper import DirectionalShipper
+from src.core.constants import SCREEN_HEIGHT, SCREEN_WIDTH
 
 
 class PopupMixin:
@@ -56,7 +32,7 @@ class PopupMixin:
             "2. Customers use Local Search to choose a store.",
             "3. Go to the Store to pick up the order, then deliver it to the House.",
             "4. Four NPC shippers compete against you using AI algorithms.",
-            "5. NPCs use BFS, A*, Beam Search, and Q-Learning.",
+            "5. NPCs use the algorithm group selected from LEVEL.",
             "6. Press SPACE to let Auto Player follow the selected algorithm.",
             "7. The first shipper to reach the target money wins.",
             "8. Results are saved to stats.csv for the report.",

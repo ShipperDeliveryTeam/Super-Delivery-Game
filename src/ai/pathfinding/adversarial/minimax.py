@@ -3,7 +3,6 @@ from __future__ import annotations
 from time import perf_counter
 
 from src.ai.pathfinding.adversarial.game_state import (
-    OPPONENT_TURN,
     PLAYER_TURN,
     AdversarialGameState,
     AdversarialSearchResult,

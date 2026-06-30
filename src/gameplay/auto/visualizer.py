@@ -22,10 +22,8 @@ from src.gameplay.auto.algorithm_groups import get_algorithms_by_group, get_grou
 from src.gameplay.auto.config import get_auto_map_config
 from src.gameplay.auto.complex_traps import build_trap_setup
 from src.gameplay.auto.delivery_search import delivery_search
-from src.gameplay.auto.maps.graph_adapter import AutoMapGraph
 from src.gameplay.auto.maps.tmx_loader import GridPos, load_auto_map
 from src.gameplay.auto.order_factory import load_orders_for_map
-from src.gameplay.auto.pathfinder_adapter import find_auto_path
 from src.gameplay.auto.route_cost_matrix import RouteCostMatrix, build_route_cost_matrix
 
 

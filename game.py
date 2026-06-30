@@ -15,7 +15,7 @@ if importlib.util.find_spec("pygame") is None and LOCAL_VENDOR_DIR.is_dir():
     sys.path.insert(0, str(LOCAL_VENDOR_DIR))
 
 
-def parse_args():
+def parse_args(): # định nghĩa các tham số
     parser = argparse.ArgumentParser(description="Super Delivery Game")
     parser.add_argument("--map", type=int, default=None)
     parser.add_argument("--algorithm", type=str, default=None)

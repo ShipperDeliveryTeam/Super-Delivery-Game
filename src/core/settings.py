@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import List, Tuple
+from typing import List
 
 from .constants import (
     GAME_TITLE,
@@ -76,8 +76,6 @@ class GameSettings:
             "A_STAR": "ASTAR",
             "BEAM_SEARCH": "BEAM",
             "PARTIAL": "PARTIAL_OBSERVATION",
-            "QLEARNING": "Q_LEARNING",
-            "Q-LEARNING": "Q_LEARNING",
         }
 
         algorithm = alias.get(algorithm, algorithm)

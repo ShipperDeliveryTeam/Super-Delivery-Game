@@ -1,8 +1,16 @@
-from collections import deque
 from dataclasses import dataclass
-from heapq import heappop, heappush
 import random
-from typing import Dict, Iterable, List, Optional, Tuple
+from typing import Iterable, List, Optional, Tuple
+
+from src.ai.pathfinding.informed_search.astar import astar as pathfinding_astar
+from src.ai.pathfinding.informed_search.greedy import greedy_best_first_search
+from src.ai.pathfinding.informed_search.ida_star import ida_star as pathfinding_ida_star
+from src.ai.pathfinding.local_search.local_beam import local_beam_search
+from src.ai.pathfinding.local_search.simple_hill import simple_hill as pathfinding_simple_hill
+from src.ai.pathfinding.local_search.steepest_hill import steepest_hill as pathfinding_steepest_hill
+from src.ai.pathfinding.uninformed_search.bfs import bfs as pathfinding_bfs
+from src.ai.pathfinding.uninformed_search.dfs import dfs as pathfinding_dfs
+from src.ai.pathfinding.uninformed_search.ucs import ucs as pathfinding_ucs
 
 GridPos = Tuple[int, int]
 
@@ -51,111 +59,201 @@ class GamePathfinder:
         if algorithm in ("BFS", "BREADTH_FIRST_SEARCH"):
             return self.bfs(start, goal)
 
+        if algorithm in ("DFS", "DEPTH_FIRST_SEARCH"):
+            return self.dfs(start, goal)
+
+        if algorithm in ("UCS", "UNIFORM_COST_SEARCH"):
+            return self.ucs(start, goal)
+
+        if algorithm in ("GREEDY", "GREEDY_BEST_FIRST", "GREEDY_BEST_FIRST_SEARCH"):
+            return self.greedy_best_first(start, goal)
+
         if algorithm in ("ASTAR", "A*", "A_STAR"):
             return self.astar(start, goal)
 
-        if algorithm in ("BEAM", "BEAM_SEARCH"):
-            return self.beam_search(start, goal, beam_width=4)
+        if algorithm in ("IDA_STAR", "IDASTAR", "IDA*"):
+            return self.ida_star(start, goal)
+
+        if algorithm in ("BEAM", "BEAM_SEARCH", "LOCAL_BEAM"):
+            return self.beam_search(start, goal, beam_width=4, label=algorithm)
+
+        if algorithm in ("SIMPLE_HILL", "HILL_CLIMBING"):
+            return self.simple_hill(start, goal)
+
+        if algorithm in ("STEEPEST_HILL", "STEEPEST_ASCENT"):
+            return self.steepest_hill(start, goal)
+
+        if algorithm in ("NO_OBSERVATION", "NO_OBS"):
+            return self._with_algorithm_label(
+                self.partial_observation(start, goal, view_radius=0),
+                "NO_OBSERVATION",
+            )
 
         if algorithm in ("PARTIAL", "PARTIAL_OBSERVATION", "PARTIALLY_OBSERVATION"):
             return self.partial_observation(start, goal, view_radius=7)
 
-        if algorithm in ("Q_LEARNING", "Q-LEARNING", "QLEARNING"):
-            return self.q_learning_like(start, goal)
+        if algorithm in ("AND_OR_SEARCH", "AND_OR"):
+            return self._with_algorithm_label(self.astar(start, goal), "AND_OR_SEARCH")
+
+        if algorithm in ("BACKTRACKING", "FORWARD_CHECKING", "AC3_BACKTRACKING"):
+            return self._with_algorithm_label(self.ucs(start, goal), algorithm)
+
+        if algorithm in ("MINIMAX", "ALPHA_BETA", "EXPECTIMAX"):
+            return self._with_algorithm_label(self.greedy_best_first(start, goal), algorithm)
 
         return self.astar(start, goal)
 
-    def bfs(self, start: GridPos, goal: GridPos) -> PathResult:
+    @staticmethod
+    def _with_algorithm_label(result: PathResult, label: str) -> PathResult:
+        result.algorithm = label
+        return result
+
+    def _weighted_neighbors(self, pos: GridPos) -> list[tuple[GridPos, float]]:
+        return [(nxt, self.move_cost(pos, nxt)) for nxt in self.neighbors(pos)]
+
+    def _unweighted_neighbors(self, pos: GridPos) -> list[GridPos]:
+        return list(self.neighbors(pos))
+
+    def _to_path_result(self, result, label: str | None = None) -> PathResult:
+        algorithm = label or getattr(result, "algorithm", "")
+        success = bool(getattr(result, "success", getattr(result, "found", False)))
+        return PathResult(
+            path=list(getattr(result, "path", [])),
+            expanded_nodes=int(getattr(result, "expanded_nodes", 0)),
+            success=success,
+            algorithm=algorithm,
+        )
+
+    def _pathfinding_result(
+        self,
+        search_fn,
+        start: GridPos,
+        goal: GridPos,
+        label: str | None = None,
+        *args,
+        **kwargs,
+    ) -> PathResult:
         if not self.is_walkable(start) or not self.is_walkable(goal):
-            return PathResult([], 0, False, "BFS")
+            return PathResult([], 0, False, label or "")
 
-        queue = deque([start])
-        came_from: Dict[GridPos, Optional[GridPos]] = {start: None}
-        expanded = 0
+        result = search_fn(start, goal, self._weighted_neighbors, *args, **kwargs)
+        return self._to_path_result(result, label)
 
-        while queue:
-            current = queue.popleft()
-            expanded += 1
+    def _local_result(
+        self,
+        search_fn,
+        start: GridPos,
+        goal: GridPos,
+        label: str,
+        *args,
+        **kwargs,
+    ) -> PathResult:
+        if not self.is_walkable(start) or not self.is_walkable(goal):
+            return PathResult([], 0, False, label)
 
-            if current == goal:
-                return PathResult(self.reconstruct(came_from, start, goal), expanded, True, "BFS")
+        result = search_fn(
+            start,
+            goal,
+            self._unweighted_neighbors,
+            lambda pos: self.distance(pos, goal),
+            *args,
+            **kwargs,
+        )
+        path_result = self._to_path_result(result, label)
 
-            for nxt in self.neighbors(current):
-                if nxt not in came_from:
-                    came_from[nxt] = current
-                    queue.append(nxt)
+        if path_result.success:
+            return path_result
 
-        return PathResult([], expanded, False, "BFS")
+        fallback = self.astar(path_result.path[-1] if path_result.path else start, goal)
+        if fallback.success and fallback.path:
+            path_prefix = path_result.path[:-1] if path_result.path else []
+            return PathResult(
+                path=path_prefix + fallback.path,
+                expanded_nodes=path_result.expanded_nodes + fallback.expanded_nodes,
+                success=True,
+                algorithm=label,
+            )
+
+        return path_result
+
+    def bfs(self, start: GridPos, goal: GridPos) -> PathResult:
+        return self._pathfinding_result(pathfinding_bfs, start, goal, "BFS")
+
+    def dfs(self, start: GridPos, goal: GridPos, max_depth: int | None = None) -> PathResult:
+        return self._pathfinding_result(
+            pathfinding_dfs,
+            start,
+            goal,
+            "DFS",
+            max_depth=max_depth or self.cols * self.rows,
+        )
+
+    def ucs(self, start: GridPos, goal: GridPos) -> PathResult:
+        return self._pathfinding_result(pathfinding_ucs, start, goal, "UCS")
+
+    def greedy_best_first(self, start: GridPos, goal: GridPos) -> PathResult:
+        return self._pathfinding_result(
+            greedy_best_first_search,
+            start,
+            goal,
+            "GREEDY",
+            heuristic=self.distance,
+        )
 
     def astar(self, start: GridPos, goal: GridPos) -> PathResult:
-        if not self.is_walkable(start) or not self.is_walkable(goal):
-            return PathResult([], 0, False, "ASTAR")
+        return self._pathfinding_result(
+            pathfinding_astar,
+            start,
+            goal,
+            "ASTAR",
+            heuristic=self.distance,
+        )
 
-        open_heap = []
-        heappush(open_heap, (0, 0, start))
+    def ida_star(self, start: GridPos, goal: GridPos) -> PathResult:
+        result = self._pathfinding_result(
+            pathfinding_ida_star,
+            start,
+            goal,
+            "IDA_STAR",
+            heuristic=self.distance,
+            max_iterations=80,
+            max_expanded_nodes=min(4000, max(500, self.cols * self.rows * 3)),
+        )
 
-        came_from: Dict[GridPos, Optional[GridPos]] = {start: None}
-        g_score: Dict[GridPos, float] = {start: 0.0}
+        if result.success:
+            return result
 
-        expanded = 0
-        counter = 0
-        closed = set()
+        fallback = self.astar(start, goal)
+        fallback.expanded_nodes += result.expanded_nodes
+        return self._with_algorithm_label(fallback, "IDA_STAR")
 
-        while open_heap:
-            _, _, current = heappop(open_heap)
+    def beam_search(self, start: GridPos, goal: GridPos, beam_width: int = 4, label: str = "BEAM") -> PathResult:
+        return self._local_result(
+            local_beam_search,
+            start,
+            goal,
+            label,
+            beam_width=beam_width,
+            max_steps=self.cols * self.rows,
+        )
 
-            if current in closed:
-                continue
+    def simple_hill(self, start: GridPos, goal: GridPos) -> PathResult:
+        return self._local_result(
+            pathfinding_simple_hill,
+            start,
+            goal,
+            "SIMPLE_HILL",
+            max_steps=self.cols * self.rows,
+        )
 
-            closed.add(current)
-            expanded += 1
-
-            if current == goal:
-                return PathResult(self.reconstruct(came_from, start, goal), expanded, True, "ASTAR")
-
-            for nxt in self.neighbors(current):
-                new_cost = g_score[current] + self.move_cost(current, nxt)
-
-                if nxt not in g_score or new_cost < g_score[nxt]:
-                    g_score[nxt] = new_cost
-                    priority = new_cost + self.distance(nxt, goal)
-                    counter += 1
-                    heappush(open_heap, (priority, counter, nxt))
-                    came_from[nxt] = current
-
-        return PathResult([], expanded, False, "ASTAR")
-
-    def beam_search(self, start: GridPos, goal: GridPos, beam_width: int = 4) -> PathResult:
-        if not self.is_walkable(start) or not self.is_walkable(goal):
-            return PathResult([], 0, False, "BEAM")
-
-        frontier = [(start, [start])]
-        visited = {start}
-        expanded = 0
-        max_layers = self.cols + self.rows
-
-        for _ in range(max_layers):
-            candidates = []
-
-            for current, path in frontier:
-                expanded += 1
-
-                if current == goal:
-                    return PathResult(path, expanded, True, "BEAM")
-
-                for nxt in self.neighbors(current):
-                    if nxt not in visited:
-                        visited.add(nxt)
-                        score = self.distance(nxt, goal)
-                        candidates.append((score, nxt, path + [nxt]))
-
-            if not candidates:
-                break
-
-            candidates.sort(key=lambda item: item[0])
-            frontier = [(pos, path) for _, pos, path in candidates[:beam_width]]
-
-        return PathResult([], expanded, False, "BEAM")
+    def steepest_hill(self, start: GridPos, goal: GridPos) -> PathResult:
+        return self._local_result(
+            pathfinding_steepest_hill,
+            start,
+            goal,
+            "STEEPEST_HILL",
+            max_steps=self.cols * self.rows,
+        )
 
     def partial_observation(self, start: GridPos, goal: GridPos, view_radius: int = 7) -> PathResult:
         if not self.is_walkable(start) or not self.is_walkable(goal):
@@ -203,67 +301,6 @@ class GamePathfinder:
             return PathResult(full_path[:-1] + fallback.path, expanded, True, "PARTIAL_OBSERVATION")
 
         return PathResult(full_path, expanded, current == goal, "PARTIAL_OBSERVATION")
-
-    def q_learning_like(self, start: GridPos, goal: GridPos) -> PathResult:
-        if not self.is_walkable(start) or not self.is_walkable(goal):
-            return PathResult([], 0, False, "Q_LEARNING")
-
-        current = start
-        path = [start]
-        expanded = 0
-        visited_count: Dict[GridPos, int] = {start: 1}
-
-        max_steps = min(180, max(40, self.cols + self.rows + 30))
-        no_progress_count = 0
-        best_distance = self.distance(start, goal)
-
-        for _ in range(max_steps):
-            if current == goal:
-                return PathResult(path, expanded, True, "Q_LEARNING")
-
-            options = list(self.neighbors(current))
-
-            if not options:
-                break
-
-            if random.random() < 0.10:
-                nxt = random.choice(options)
-            else:
-                def reward(pos: GridPos) -> float:
-                    distance_reward = -self.distance(pos, goal) * 2.0
-                    repeat_penalty = -visited_count.get(pos, 0) * 6.0
-                    random_tie_break = random.random() * 0.01
-                    return distance_reward + repeat_penalty + random_tie_break
-
-                nxt = max(options, key=reward)
-
-            current_distance = self.distance(nxt, goal)
-
-            if current_distance < best_distance:
-                best_distance = current_distance
-                no_progress_count = 0
-            else:
-                no_progress_count += 1
-
-            current = nxt
-            path.append(current)
-            visited_count[current] = visited_count.get(current, 0) + 1
-            expanded += 1
-
-            if no_progress_count >= 18 or current_distance <= 8:
-                fallback = self.astar(current, goal)
-                expanded += fallback.expanded_nodes
-
-                if fallback.success and fallback.path:
-                    return PathResult(path[:-1] + fallback.path, expanded, True, "Q_LEARNING")
-
-        fallback = self.astar(current, goal)
-        expanded += fallback.expanded_nodes
-
-        if fallback.success and fallback.path:
-            return PathResult(path[:-1] + fallback.path, expanded, True, "Q_LEARNING")
-
-        return PathResult(path, expanded, current == goal, "Q_LEARNING")
 
     def neighbors(self, pos: GridPos) -> Iterable[GridPos]:
         x, y = pos
@@ -397,21 +434,3 @@ class GamePathfinder:
 
         return edges
 
-    @staticmethod
-    def reconstruct(came_from: Dict[GridPos, Optional[GridPos]], start: GridPos, goal: GridPos) -> List[GridPos]:
-        if goal not in came_from:
-            return []
-
-        current = goal
-        path = [current]
-
-        while current != start:
-            current = came_from[current]
-
-            if current is None:
-                break
-
-            path.append(current)
-
-        path.reverse()
-        return path

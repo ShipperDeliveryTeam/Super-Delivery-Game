@@ -116,6 +116,7 @@ class PlayModeMixin:
                     task.delivery_started_at = float(getattr(self, "elapsed_time", 0.0))
                     self.player_task = task
                     self._refresh_player_path_hint()
+                    self._play_sound_effect("pickup")
                 break
 
             if task.picked_up and current_pos == task.house_pos:
@@ -136,6 +137,7 @@ class PlayModeMixin:
             self.player.money = max(0, self.player.money - 100)
             self.player_trap_wait_until = float(getattr(self, "elapsed_time", 0.0)) + 5.0
             self._player_last_trap_penalty_pos = self.player.grid_pos
+            self._play_sound_effect("trap")
         else:
             self._player_last_trap_penalty_pos = None
 

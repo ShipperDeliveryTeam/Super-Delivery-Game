@@ -196,6 +196,39 @@ class GameSmokeTests(unittest.TestCase):
         self.assertGreater(manager.npc_wait_until.get(npc.name, 0), manager.elapsed_time)
         self.assertEqual(manager.npc_wait_action.get(npc.name), "pickup")
 
+    def test_play_mode_npcs_use_selected_algorithm_group(self):
+        settings = GameSettings()
+        settings.set_algorithm_group(2)
+        manager = GameManager(settings, debug=True)
+        manager._start_play_mode()
+
+        self.assertEqual(
+            [npc.algorithm for npc in manager.npc_shippers],
+            ["GREEDY", "ASTAR", "IDA_STAR"],
+        )
+
+    def test_npc_waits_five_seconds_when_hitting_trap(self):
+        manager = GameManager(GameSettings(), debug=True)
+        manager._start_play_mode()
+        npc = manager.npc_shippers[0]
+        task = manager.available_player_tasks[0]
+        trap_pos = npc.grid_pos
+        manager.trap_positions = {trap_pos}
+
+        npc.money = 50
+        npc.set_grid_pos(trap_pos)
+        manager.npc_tasks[npc.name] = task
+        manager.npc_paths[npc.name] = []
+
+        manager._update_npcs()
+
+        self.assertEqual(npc.money, 40)
+        self.assertEqual(manager.npc_wait_action.get(npc.name), "trap")
+        self.assertAlmostEqual(
+            manager.npc_wait_until.get(npc.name, 0.0),
+            manager.elapsed_time + 5.0,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

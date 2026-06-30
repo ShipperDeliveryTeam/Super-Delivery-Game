@@ -7,7 +7,6 @@ from src.gameplay.auto.config import get_auto_map_config
 from src.gameplay.auto.complex_traps import build_trap_setup
 from src.gameplay.auto.order_factory import load_orders_for_map
 from src.gameplay.auto.maps.tmx_loader import load_auto_map
-from src.gameplay.auto.route_cost_matrix import build_route_cost_matrix
 
 
 def test_complex_search_group_on_map(map_id: int) -> None:

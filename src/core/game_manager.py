@@ -1,12 +1,11 @@
 from src.entities.directional_shipper import DirectionalShipper
-from pathlib import Path
 from typing import List, Optional, Tuple
 
 # pyrefly: ignore [missing-import]
 import pygame
 
 from .command_handler import CommandHandlerMixin
-from .constants import GAME_TITLE, GRID_COLS, GRID_ROWS, SCREEN_WIDTH, TILE_SIZE
+from .constants import GAME_TITLE, GRID_COLS, GRID_ROWS, TILE_SIZE
 from .event_handler import EventHandler
 from .game_state import GameState
 from .settings import GameSettings
@@ -24,6 +23,7 @@ from src.maps.map_manager import MapManagerMixin
 from src.maps.matrix_loader import MatrixLoader
 from src.maps.tmx_loader import TmxMapLoader
 from src.systems.asset_manager import AssetManagerMixin
+from src.systems.sound_manager import SoundManager
 from src.systems.sprite_loader import SpriteLoader
 from src.systems.stats_logger import StatsLogger
 from src.ui.button import ButtonMixin
@@ -85,6 +85,7 @@ class GameManager(
         self.tmx_loader = TmxMapLoader(GRID_COLS, GRID_ROWS, TILE_SIZE)
         self.stats_logger = StatsLogger("stats.csv")
         self.order_generator = OrderGenerator()
+        self.sound_manager = SoundManager(enabled=self.settings.sound_enabled)
 
         self.map_image = None
         self.map_source = "none"
@@ -167,6 +168,8 @@ class GameManager(
         self.hud_mode = 1
 
         self._load_assets()
+        self.sound_manager.load()
+        self.sound_manager.play_background()
         self._load_map_for_selected_map()
         self._reset_game()
 
@@ -177,4 +180,5 @@ class GameManager(
             self._update(dt)
             self._draw()
 
+        self.sound_manager.stop()
         pygame.quit()

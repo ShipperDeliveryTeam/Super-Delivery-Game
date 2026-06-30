@@ -1,36 +1,21 @@
 from __future__ import annotations
 
-import random
-from pathlib import Path
-from typing import List, Optional, Tuple
-
-import pygame
-
-from src.core.constants import (
-    BACKGROUND_COLOR,
-    GRID_LINE_COLOR,
-    TEXT_COLOR,
-    PLAYER_COLOR,
-    NPC_COLORS,
-    SCREEN_WIDTH,
-    SCREEN_HEIGHT,
-    TILE_SIZE,
-    GRID_COLS,
-    GRID_ROWS,
-    GAME_TITLE,
-)
 from src.core.game_state import GameState
 from src.core.event_handler import CommandType, GameCommand
-from src.ai.game_pathfinder import GamePathfinder
-from src.gameplay.delivery_task import DeliveryTask
-from src.gameplay.order_generator import OrderGenerator
-from src.gameplay.roundabout_geometry import build_roundabout_curve, curve_point
-from src.systems.stats_logger import StatsLogger, GameStatsRecord
-from src.systems.asset_paths import get_ui_asset_path
-from src.entities.directional_shipper import DirectionalShipper
 
 
 class CommandHandlerMixin:
+    def _play_sound_effect(self, name: str) -> None:
+        sound_manager = getattr(self, "sound_manager", None)
+        if sound_manager is not None:
+            sound_manager.play_effect(name)
+
+    def _toggle_sound(self) -> None:
+        enabled = self.settings.toggle_sound()
+        sound_manager = getattr(self, "sound_manager", None)
+        if sound_manager is not None:
+            sound_manager.set_enabled(enabled)
+
     def _handle_commands(self) -> None:
         for command in self.event_handler.handle_events():
             self._execute_command(command)
@@ -76,7 +61,7 @@ class CommandHandlerMixin:
             self.settings.toggle_path_hint()
 
         elif ctype == CommandType.TOGGLE_SOUND:
-            self.settings.toggle_sound()
+            self._toggle_sound()
 
         elif ctype == CommandType.TOGGLE_AUTO_PLAYER:
             self.auto_player_enabled = not self.auto_player_enabled

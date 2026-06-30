@@ -1,36 +1,18 @@
 from __future__ import annotations
 
-import random
-from pathlib import Path
-from typing import List, Optional, Tuple
-
-# pyrefly: ignore [missing-import]
-import pygame
-
-from src.core.constants import (
-    BACKGROUND_COLOR,
-    GRID_LINE_COLOR,
-    TEXT_COLOR,
-    PLAYER_COLOR,
-    NPC_COLORS,
-    SCREEN_WIDTH,
-    SCREEN_HEIGHT,
-    TILE_SIZE,
-    GRID_COLS,
-    GRID_ROWS,
-    GAME_TITLE,
-)
-from src.core.game_state import GameState
-from src.ai.game_pathfinder import GamePathfinder
-from src.gameplay.delivery_task import DeliveryTask
-from src.gameplay.order_generator import OrderGenerator
-from src.gameplay.roundabout_geometry import build_roundabout_curve, curve_point
-from src.systems.stats_logger import StatsLogger, GameStatsRecord
+from src.core.constants import NPC_COLORS, PLAYER_COLOR, TILE_SIZE
 from src.systems.asset_paths import get_npc_sprite_paths, get_player_sprite_paths
 from src.entities.directional_shipper import DirectionalShipper
+from src.gameplay.auto.algorithm_groups import get_algorithms_by_group
 
 
 class GameplayControllerMixin:
+    def _play_mode_npc_algorithms(self) -> list[str]:
+        group_id = int(getattr(self.settings, "selected_algorithm_group_id", 1))
+        algorithms = get_algorithms_by_group(group_id)
+
+        return algorithms or get_algorithms_by_group(1)
+
     def _create_shipper_objects(self) -> None:
         player_sprites = self.sprite_loader.load_directional_set(
             get_player_sprite_paths(),
@@ -49,7 +31,7 @@ class GameplayControllerMixin:
 
         self.npc_shippers = []
         default_positions = [(8, 8), (14, 10), (20, 12)]
-        algorithms = ["BFS", "ASTAR", "Q_LEARNING"]
+        algorithms = self._play_mode_npc_algorithms()
 
         for i in range(3):
             npc_sprites = self.sprite_loader.load_directional_set(
@@ -62,7 +44,7 @@ class GameplayControllerMixin:
             raw_pos = self.npc_spawns[i] if i < len(self.npc_spawns) else default_positions[i]
             pos = self._nearest_walkable(raw_pos)
 
-            algorithm = algorithms[i]
+            algorithm = algorithms[i % len(algorithms)]
             npc = DirectionalShipper(algorithm, pos, npc_sprites, TILE_SIZE)
             npc.algorithm = algorithm
             npc.allow_diagonal = self._allow_diagonal_movement()

@@ -3,7 +3,7 @@ from __future__ import annotations
 import random
 from heapq import heappop, heappush
 from src.core.game_state import GameState
-from src.core.constants import NPC_COLORS, TILE_SIZE
+from src.core.constants import TILE_SIZE
 from src.entities.directional_shipper import DirectionalShipper
 from src.gameplay.auto.complex_traps import build_trap_setup
 from src.gameplay.auto.maps.graph_adapter import AutoMapGraph
@@ -19,6 +19,7 @@ from src.systems.asset_paths import get_npc_sprite_paths
 
 
 AUTO_VISUAL_SHIPPER_SPEED = 260.0
+NPC_TRAP_WAIT_SECONDS = 5.0
 
 
 class AutoModeMixin:
@@ -741,6 +742,9 @@ class AutoModeMixin:
             if wait_action == "pickup":
                 self._clear_npc_wait(npc.name)
                 wait_action = None
+            elif wait_action == "trap":
+                self._clear_npc_wait(npc.name)
+                wait_action = None
 
             if npc.name not in self.npc_tasks or self.npc_tasks[npc.name].delivered or getattr(self.npc_tasks[npc.name], "stolen_by", None) not in (None, npc.name):
                 task = self._choose_npc_disruption_task(npc)
@@ -754,6 +758,10 @@ class AutoModeMixin:
                 self.npc_tasks.pop(npc.name, None)
                 self.npc_paths[npc.name] = []
                 continue
+
+            path = self.npc_paths.get(npc.name, [])
+            if path and not self._npc_path_matches_task(npc, path, task):
+                self.npc_paths[npc.name] = []
 
             if not self.npc_paths.get(npc.name):
                 result = self.pathfinder.find_path(
@@ -779,6 +787,8 @@ class AutoModeMixin:
 
                     if self._try_move_shipper_delta(npc, dx, dy):
                         path.pop(0)
+                    else:
+                        self.npc_paths[npc.name] = []
                 else:
                     self.npc_paths[npc.name] = []
 
@@ -810,7 +820,36 @@ class AutoModeMixin:
                 continue
 
             if npc.grid_pos in self.trap_positions:
-                npc.money = max(0, npc.money - 10)
+                last_traps = getattr(self, "npc_last_trap_penalty_pos", {})
+
+                if last_traps.get(npc.name) != npc.grid_pos:
+                    npc.money = max(0, npc.money - 10)
+                    npc.stop()
+                    self.npc_paths[npc.name] = []
+                    self._start_npc_wait(npc.name, "trap", NPC_TRAP_WAIT_SECONDS)
+                    last_traps[npc.name] = npc.grid_pos
+                    self.npc_last_trap_penalty_pos = last_traps
+            else:
+                last_traps = getattr(self, "npc_last_trap_penalty_pos", {})
+                last_traps.pop(npc.name, None)
+                self.npc_last_trap_penalty_pos = last_traps
+
+    def _npc_path_matches_task(self, npc, path: list[tuple[int, int]], task) -> bool:
+        if not path:
+            return True
+
+        base_pos = self._movement_base_pos(npc)
+
+        while path and path[0] == base_pos:
+            path.pop(0)
+
+        if not path:
+            return True
+
+        if path[-1] != task.target_pos:
+            return False
+
+        return self.pathfinder.can_step(base_pos, path[0])
 
     def _start_npc_wait(self, npc_name: str, action: str, seconds: float) -> None:
         waits = getattr(self, "npc_wait_until", {})

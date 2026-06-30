@@ -1,44 +1,15 @@
 from __future__ import annotations
 
-import random
-from pathlib import Path
-from typing import List, Optional, Tuple
-
 # pyrefly: ignore [missing-import]
 import pygame
 
-from src.core.constants import (
-    BACKGROUND_COLOR,
-    GRID_LINE_COLOR,
-    TEXT_COLOR,
-    PLAYER_COLOR,
-    NPC_COLORS,
-    SCREEN_WIDTH,
-    SCREEN_HEIGHT,
-    TILE_SIZE,
-    GRID_COLS,
-    GRID_ROWS,
-    GAME_TITLE,
-)
-from src.core.game_state import GameState
-from src.ai.game_pathfinder import GamePathfinder
-from src.gameplay.delivery_task import DeliveryTask
-from src.gameplay.order_generator import OrderGenerator
-from src.gameplay.roundabout_geometry import build_roundabout_curve, curve_point
-from src.maps.matrix_loader import MatrixLoader
-from src.maps.tmx_loader import TmxMapLoader
-from src.systems.stats_logger import StatsLogger, GameStatsRecord
+from src.core.constants import SCREEN_HEIGHT, SCREEN_WIDTH, TILE_SIZE
 from src.systems.asset_paths import (
-    get_map_image_path,
     get_player_sprite_paths,
-    get_npc_sprite_paths,
     get_icon_path,
     get_ui_asset_path,
     IMAGES_DIR,
-    MAPS_DIR,
 )
-from src.systems.sprite_loader import SpriteLoader
-from src.entities.directional_shipper import DirectionalShipper
 
 
 class AssetManagerMixin:

@@ -1,33 +1,7 @@
 from __future__ import annotations
 
-import random
-from pathlib import Path
-from typing import List, Optional, Tuple
-
-# pyrefly: ignore [missing-import]
-import pygame
-
-from src.core.constants import (
-    BACKGROUND_COLOR,
-    GRID_LINE_COLOR,
-    TEXT_COLOR,
-    PLAYER_COLOR,
-    NPC_COLORS,
-    SCREEN_WIDTH,
-    SCREEN_HEIGHT,
-    TILE_SIZE,
-    GRID_COLS,
-    GRID_ROWS,
-    GAME_TITLE,
-)
 from src.core.game_state import GameState
-from src.ai.game_pathfinder import GamePathfinder
-from src.gameplay.delivery_task import DeliveryTask
-from src.gameplay.order_generator import OrderGenerator
-from src.gameplay.roundabout_geometry import build_roundabout_curve, curve_point
 from src.systems.stats_logger import StatsLogger, GameStatsRecord
-from src.systems.asset_paths import get_ui_asset_path
-from src.entities.directional_shipper import DirectionalShipper
 
 
 class GameFlowMixin:
@@ -37,6 +11,7 @@ class GameFlowMixin:
 
         self.winner_name = winner_name
         self.state = GameState.WIN if winner_name == "Player" else GameState.GAME_OVER
+        self._play_sound_effect("win" if winner_name == "Player" else "gameover")
         self._log_result()
         self.result_logged = True
 
@@ -93,6 +68,7 @@ class GameFlowMixin:
         self.npc_expanded = {}
         self.npc_wait_until = {}
         self.npc_wait_action = {}
+        self.npc_last_trap_penalty_pos = {}
 
         if self.player:
             self.player.money = 0

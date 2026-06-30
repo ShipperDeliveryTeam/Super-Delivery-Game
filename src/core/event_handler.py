@@ -126,9 +126,6 @@ class EventHandler:
         elif key == pygame.K_F4:
             commands.append(GameCommand(CommandType.SELECT_ALGORITHM, "PARTIAL_OBSERVATION"))
 
-        elif key == pygame.K_F5:
-            commands.append(GameCommand(CommandType.SELECT_ALGORITHM, "Q_LEARNING"))
-
         return commands
 
     def _handle_key_up(self, key: int) -> List[GameCommand]:

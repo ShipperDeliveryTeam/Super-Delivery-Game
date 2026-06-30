@@ -1,33 +1,12 @@
 from __future__ import annotations
 
-import random
 from pathlib import Path
-from typing import List, Optional, Tuple
 
 # pyrefly: ignore [missing-import]
 import pygame
 
-from src.core.constants import (
-    BACKGROUND_COLOR,
-    GRID_LINE_COLOR,
-    TEXT_COLOR,
-    PLAYER_COLOR,
-    NPC_COLORS,
-    SCREEN_WIDTH,
-    SCREEN_HEIGHT,
-    TILE_SIZE,
-    GRID_COLS,
-    GRID_ROWS,
-    GAME_TITLE,
-)
+from src.core.constants import SCREEN_HEIGHT, SCREEN_WIDTH
 from src.core.game_state import GameState
-from src.ai.game_pathfinder import GamePathfinder
-from src.gameplay.delivery_task import DeliveryTask
-from src.gameplay.order_generator import OrderGenerator
-from src.gameplay.roundabout_geometry import build_roundabout_curve, curve_point
-from src.systems.stats_logger import StatsLogger, GameStatsRecord
-from src.systems.asset_paths import get_ui_asset_path
-from src.entities.directional_shipper import DirectionalShipper
 
 
 class MenuMixin:
@@ -293,7 +272,7 @@ class MenuMixin:
 
         if self.state == GameState.SIMULATION:
             if self._game_sound_rect and self._game_sound_rect.collidepoint(pos):
-                self.settings.toggle_sound()
+                self._toggle_sound()
                 return
 
             if self._game_pause_rect and self._game_pause_rect.collidepoint(pos):
@@ -324,7 +303,7 @@ class MenuMixin:
             return
 
         if self.sound_button_rect and self.sound_button_rect.collidepoint(pos):
-            self.settings.toggle_sound()
+            self._toggle_sound()
             return
 
         if self.menu_button_rect and self.menu_button_rect.collidepoint(pos):
