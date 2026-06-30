@@ -8,7 +8,7 @@ nó DFS nhiều lần với ngưỡng f-score tăng dần, giúp tiết kiệm b
 
 from time import perf_counter
 
-from src.ai.pathfinding.search_common import SearchResult, calculate_path_cost
+from src.ai.pathfinding.search_common import SearchResult, calculate_path_cost, is_goal
 
 
 FOUND = "FOUND"
@@ -44,7 +44,7 @@ def ida_star(
         if f_score > current_limit:
             return f_score
 
-        if current == goal:
+        if is_goal(current, goal):
             return FOUND
 
         if expanded_nodes >= max_expanded_nodes:

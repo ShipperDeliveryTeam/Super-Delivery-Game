@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from src.gameplay.auto.delivery_search import delivery_search
+from src.ai.pathfinding.delivery_search import delivery_search
 from src.gameplay.auto.maps.tmx_loader import load_auto_map
 from src.gameplay.auto.order_factory import load_orders_for_map
 

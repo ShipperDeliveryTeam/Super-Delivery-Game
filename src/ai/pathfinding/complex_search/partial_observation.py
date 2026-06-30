@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-"""Partial Observation Search.
+"""Partial Observation.
 
-Thuật toán này mô phỏng trường hợp shipper biết trước một phần thông tin bẫy.
-Trong game, hai bẫy đầu tiên được coi là đã biết và xuất hiện trong mọi belief.
+Map co 3 bay. Thuat toan biet truoc 1 bay, sau do doan 2 bay con lai
+trong tung belief state va chay A* rieng cho moi belief.
 """
 
 from time import perf_counter
@@ -18,26 +18,39 @@ def partial_observation_search(
     capacity=1,
     max_iterations=100,
     max_traps=None,
+    map_data=None,
+    orders=None,
+    true_traps=(),
 ):
-    """Tạo belief state với một phần bẫy đã biết trước."""
-
     started_at = perf_counter()
 
-    # Biết trước 2 bẫy thật. Hai bẫy này luôn nằm trong mọi belief state.
-    known_traps = tuple(known_traps[:2])
+    known_traps = tuple(known_traps[:1])
     unknown_traps = []
 
     for trap in possible_traps:
         if trap not in known_traps:
             unknown_traps.append(trap)
 
-    belief_states = make_belief_states(unknown_traps, known_traps, max_traps=max_traps)
+    if max_traps is None:
+        unknown_count = 2
+    else:
+        unknown_count = max(0, max_traps - len(known_traps))
+
+    belief_states = make_belief_states(
+        candidate_cells=unknown_traps,
+        known_traps=known_traps,
+        max_traps=max_traps,
+        unknown_count=unknown_count,
+    )
 
     return make_result(
         algorithm="PARTIAL_OBSERVATION",
         order_ids=list(order_ids),
-        risk_mode="TWO_KNOWN_TRAPS_IN_ALL_BELIEFS",
+        risk_mode="ONE_KNOWN_TWO_UNKNOWN_BELIEFS",
         belief_states=belief_states,
         known_traps=known_traps,
         started_at=started_at,
+        map_data=map_data,
+        orders=orders,
+        true_traps=true_traps,
     )

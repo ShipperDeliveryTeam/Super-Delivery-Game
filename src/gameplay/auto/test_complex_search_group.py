@@ -20,18 +20,23 @@ def test_complex_search_group_on_map(map_id: int) -> None:
 
     no_obs_result = no_observation_search(
         order_ids=order_ids,
-        possible_traps=trap_setup.possible_traps,
         capacity=config.capacity,
         max_traps=max_traps,
+        map_data=map_data,
+        orders=orders,
+        true_traps=trap_setup.traps,
     )
 
     partial_result = partial_observation_search(
         order_ids=order_ids,
         possible_traps=trap_setup.possible_traps,
-        known_traps=trap_setup.traps[:2],
+        known_traps=trap_setup.traps[:1],
         capacity=config.capacity,
         max_iterations=100,
         max_traps=max_traps,
+        map_data=map_data,
+        orders=orders,
+        true_traps=trap_setup.traps,
     )
 
     and_or_result = and_or_search(

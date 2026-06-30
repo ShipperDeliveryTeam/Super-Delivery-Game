@@ -9,7 +9,7 @@ khi mỗi bước đi có thể có chi phí khác nhau, ví dụ đi chéo đ�
 from heapq import heappop, heappush
 from time import perf_counter
 
-from src.ai.pathfinding.search_common import SearchResult, reconstruct_path
+from src.ai.pathfinding.search_common import SearchResult, is_goal, reconstruct_path
 
 
 def ucs(start, goal, get_neighbors) -> SearchResult:
@@ -37,10 +37,10 @@ def ucs(start, goal, get_neighbors) -> SearchResult:
 
         expanded_nodes += 1
 
-        if current == goal:
-            path = reconstruct_path(parent, goal)
+        if is_goal(current, goal):
+            path = reconstruct_path(parent, current)
             runtime = (perf_counter() - started_at) * 1000
-            return SearchResult("UCS", path, cost[goal], expanded_nodes, generated_nodes, runtime)
+            return SearchResult("UCS", path, cost[current], expanded_nodes, generated_nodes, runtime)
 
         for next_pos, step_cost in get_neighbors(current):
             new_cost = cost[current] + step_cost

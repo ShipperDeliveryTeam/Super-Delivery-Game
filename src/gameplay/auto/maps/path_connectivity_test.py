@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import heapq
-from itertools import count
-
+from src.ai.pathfinding.grid_search import dijkstra_grid_path
 from src.gameplay.auto.maps.graph_adapter import AutoMapGraph
 from src.gameplay.auto.maps.tmx_loader import GridPos, load_auto_map
 from src.gameplay.auto.order_factory import load_orders_for_map
@@ -13,37 +11,7 @@ def find_path_dijkstra(
     start: GridPos,
     goal: GridPos,
 ) -> tuple[list[GridPos], float]:
-    if start == goal:
-        return [start], 0.0
-
-    counter = count()
-    frontier: list[tuple[float, int, GridPos, list[GridPos]]] = []
-    heapq.heappush(frontier, (0.0, next(counter), start, [start]))
-
-    best_cost: dict[GridPos, float] = {start: 0.0}
-
-    while frontier:
-        current_cost, _, current_pos, path = heapq.heappop(frontier)
-
-        if current_pos == goal:
-            return path, current_cost
-
-        if current_cost > best_cost.get(current_pos, float("inf")):
-            continue
-
-        for next_pos, step_cost in graph.get_neighbors(current_pos):
-            new_cost = current_cost + step_cost
-
-            if new_cost >= best_cost.get(next_pos, float("inf")):
-                continue
-
-            best_cost[next_pos] = new_cost
-            heapq.heappush(
-                frontier,
-                (new_cost, next(counter), next_pos, path + [next_pos]),
-            )
-
-    return [], float("inf")
+    return dijkstra_grid_path(start, goal, graph.get_neighbors)
 
 
 def test_map_connectivity(map_id: int) -> None:

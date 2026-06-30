@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import random
-from collections import deque
 from dataclasses import dataclass
-from heapq import heappop, heappush
 
+from src.ai.pathfinding.grid_search import bfs_grid_path, dijkstra_grid_path
 from src.gameplay.auto.maps.graph_adapter import AutoMapGraph
 from src.gameplay.auto.maps.tmx_loader import AutoMapData, GridPos
 from src.gameplay.auto.models import AutoOrder
@@ -47,64 +46,12 @@ def build_possible_trap_cells(map_data: AutoMapData, orders: list[AutoOrder]) ->
 
 def _shortest_visual_path(map_data: AutoMapData, start: GridPos, goal: GridPos) -> list[GridPos]:
     graph = AutoMapGraph(map_data)
-    frontier = deque([start])
-    parent: dict[GridPos, GridPos | None] = {start: None}
-
-    while frontier:
-        current = frontier.popleft()
-        if current == goal:
-            break
-
-        for next_pos, _ in graph.get_neighbors(current):
-            if next_pos in parent:
-                continue
-            parent[next_pos] = current
-            frontier.append(next_pos)
-
-    if goal not in parent:
-        return []
-
-    path = []
-    current: GridPos | None = goal
-    while current is not None:
-        path.append(current)
-        current = parent[current]
-    path.reverse()
-    return path
+    return bfs_grid_path(start, goal, graph.get_neighbors)
 
 
 def _cost_aware_path(map_data: AutoMapData, start: GridPos, goal: GridPos, traps: set[GridPos]) -> list[GridPos]:
     graph = AutoMapGraph(map_data, trap_cells=traps)
-    frontier: list[tuple[float, int, GridPos]] = []
-    order = 0
-    heappush(frontier, (0.0, order, start))
-    parent: dict[GridPos, GridPos | None] = {start: None}
-    cost: dict[GridPos, float] = {start: 0.0}
-
-    while frontier:
-        _, _, current = heappop(frontier)
-        if current == goal:
-            break
-
-        for next_pos, step_cost in graph.get_neighbors(current):
-            new_cost = cost[current] + step_cost
-            if next_pos in cost and cost[next_pos] <= new_cost:
-                continue
-
-            cost[next_pos] = new_cost
-            parent[next_pos] = current
-            order += 1
-            heappush(frontier, (new_cost, order, next_pos))
-
-    if goal not in parent:
-        return []
-
-    path = []
-    current: GridPos | None = goal
-    while current is not None:
-        path.append(current)
-        current = parent[current]
-    path.reverse()
+    path, _ = dijkstra_grid_path(start, goal, graph.get_neighbors)
     return path
 
 

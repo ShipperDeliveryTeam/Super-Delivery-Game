@@ -1,43 +1,38 @@
 from __future__ import annotations
 
-"""AND-OR Search cho bài toán có nhiều khả năng bẫy.
+"""AND-OR Search ban don gian.
 
-AND-OR dùng khi một hành động có thể dẫn tới nhiều nhánh môi trường khác nhau.
-Ở đây mỗi nhánh là một tập bẫy giả định; thuật toán chuẩn bị nhiều case để
-đánh giá kế hoạch trước các tình huống rủi ro.
+AND-OR o day tao nhieu case bay khac nhau de mo phong cac kha nang cua moi
+truong. File nay chi tao case va actions bao cao, khong gop voi logic
+No/Partial Observation.
 """
 
 import random
 from time import perf_counter
 
-from src.ai.pathfinding.complex_search.no_observation import BeliefState, make_result
+from src.ai.pathfinding.complex_search.no_observation import BeliefState, ComplexSearchResult
 
 
-def _make_and_or_cases(possible_traps, known_traps=(), case_count=60, max_traps=None, seed=42):
-    """Sinh nhiều case bẫy để mô phỏng các nhánh OR của môi trường."""
-
+def make_case_list(possible_traps, known_traps=(), case_count=60, max_traps=None, seed=42):
     possible_traps = list(possible_traps)
     known_traps = tuple(known_traps)
-
-    if max_traps is None:
-        max_traps = len(possible_traps) + len(known_traps)
+    max_traps = max_traps or len(possible_traps) + len(known_traps)
     max_traps = max(1, max_traps)
 
-    rng = random.Random(seed + len(possible_traps) * 17 + len(known_traps) * 31)
+    rng = random.Random(seed)
     cases = []
 
     for index in range(case_count):
-        # Xen kẽ case ít bẫy, nhiều bẫy và trung bình để kế hoạch không thiên lệch.
-        if index % 3 == 0:
-            trap_count = rng.randint(max(1, len(known_traps)), max(1, max_traps // 2))
-        elif index % 3 == 1:
-            trap_count = rng.randint(max(1, max_traps // 2), max_traps)
-        else:
-            trap_count = rng.randint(max(1, len(known_traps)), max_traps)
         traps = list(known_traps)
-
         candidates = list(possible_traps)
         rng.shuffle(candidates)
+
+        if index % 3 == 0:
+            trap_count = max(1, max_traps // 2)
+        elif index % 3 == 1:
+            trap_count = max_traps
+        else:
+            trap_count = rng.randint(1, max_traps)
 
         for trap in candidates:
             if len(traps) >= trap_count:
@@ -50,6 +45,14 @@ def _make_and_or_cases(possible_traps, known_traps=(), case_count=60, max_traps=
     return tuple(cases)
 
 
+def make_report_actions(order_ids):
+    actions = []
+    for order_id in sorted(order_ids):
+        actions.append(f"P_{order_id}")
+        actions.append(f"D_{order_id}")
+    return tuple(actions)
+
+
 def and_or_search(
     order_ids,
     possible_traps=(),
@@ -60,12 +63,9 @@ def and_or_search(
     seed=42,
     max_traps=None,
 ):
-    """Chạy AND-OR bằng cách đánh giá route trên nhiều case bẫy đã sinh."""
-
     started_at = perf_counter()
 
-    # Riêng AND-OR sinh nhiều nhánh khả năng để chọn một plan dùng được cho các nhánh.
-    belief_states = _make_and_or_cases(
+    belief_states = make_case_list(
         possible_traps=possible_traps,
         known_traps=known_traps,
         case_count=60,
@@ -73,11 +73,19 @@ def and_or_search(
         seed=seed,
     )
 
-    return make_result(
+    actions = make_report_actions(order_ids)
+    cost = len(actions) * 10
+
+    return ComplexSearchResult(
         algorithm="AND_OR_SEARCH",
-        order_ids=sorted(order_ids),
+        actions=actions,
+        normal_cost=cost,
+        decision_cost=cost,
         risk_mode="MANY_PREPLANNED_CASES",
         belief_states=belief_states,
-        known_traps=known_traps,
-        started_at=started_at,
+        known_traps=tuple(known_traps),
+        iterations=len(belief_states),
+        expanded_nodes=len(belief_states),
+        generated_nodes=len(belief_states) * max(1, len(order_ids)),
+        runtime_ms=(perf_counter() - started_at) * 1000,
     )

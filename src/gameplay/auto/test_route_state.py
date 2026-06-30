@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import random
 
-from src.ai.pathfinding.local_search.route_state import (
+from src.ai.pathfinding.csp.route_state import (
     build_default_route_actions,
     generate_route_neighbors,
     make_route_state,

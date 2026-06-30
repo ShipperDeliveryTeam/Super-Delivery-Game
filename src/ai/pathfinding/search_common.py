@@ -40,6 +40,15 @@ def reconstruct_path(parent, goal):
     return path
 
 
+def is_goal(current, goal):
+    """Goal co the la mot gia tri hoac mot ham kiem tra."""
+
+    if callable(goal):
+        return goal(current)
+
+    return current == goal
+
+
 def calculate_path_cost(path, get_neighbors):
     """Tinh tong chi phi cua path."""
 

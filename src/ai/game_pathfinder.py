@@ -13,6 +13,7 @@ Khi game can tim duong, game goi:
 Ham nay se chon dung thuat toan va tra ve PathResult.
 """
 
+from math import sqrt
 import random
 
 from src.ai.pathfinding.informed_search.astar import astar as pathfinding_astar
@@ -427,9 +428,7 @@ class GamePathfinder:
         if not self.allow_diagonal:
             return dx + dy
 
-        diagonal = min(dx, dy)
-        straight = max(dx, dy) - diagonal
-        return straight + diagonal * 1.41421356237
+        return sqrt(dx * dx + dy * dy)
 
     @staticmethod
     def move_cost(a, b):

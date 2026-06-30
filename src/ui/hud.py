@@ -223,8 +223,14 @@ class HudMixin(LeftInformationCardMixin, LeftActiveDeliveryCardMixin, LeftOrderC
                 else colors[index % len(colors)]
             )
             done = bool(npc and self.auto_visual_completed.get(npc.name, False))
+            failed = bool(npc and getattr(npc, "auto_visual_failed", False))
             current_pos = npc.grid_pos if npc else "-"
-            progress = "DONE" if done else str(current_pos)
+            if failed:
+                progress = "FAILED"
+            elif done:
+                progress = "DONE"
+            else:
+                progress = str(current_pos)
             trap_hits = int(getattr(npc, "auto_visual_trap_hits", 0)) if npc else 0
 
             pygame.draw.circle(self.screen, color, (board.x + 22, y + 13), 7)

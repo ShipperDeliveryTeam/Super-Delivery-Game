@@ -1,38 +1,28 @@
 from __future__ import annotations
 
-"""Mô hình CSP cho bài toán chọn thứ tự nhận/giao đơn.
+"""CSP route solver ban don gian.
 
-Biến của CSP là các hành động P_Ox/D_Ox. Ràng buộc chính: phải nhận một đơn
-trước khi giao đơn đó, và trong game hiện tại shipper chỉ mang một đơn ở một
-thời điểm. Solver dùng backtracking, có thể bật forward checking và AC-3.
+Bai toan: sap xep thu tu don hang. Moi don luon di theo cap:
+P_Ox -> D_Ox. Vi vay backtracking chi can chon thu tu cac order_id.
 """
 
-from collections.abc import Sequence
 from dataclasses import dataclass
 from time import perf_counter
-from typing import Protocol
 
-from src.ai.pathfinding.local_search.route_state import (
+from src.ai.pathfinding.csp.route_state import (
     RouteState,
     build_default_route_actions,
-    get_order_id,
-    is_delivery,
-    is_pickup,
     make_route_state,
 )
 
 
-class RouteCostProvider(Protocol):
-    """Interface lấy chi phí di chuyển giữa hai nhãn hành động."""
-
+class RouteCostProvider:
     def get_cost(self, from_label: str, to_label: str) -> float:
-        ...
+        raise NotImplementedError
 
 
-@dataclass(frozen=True)
+@dataclass
 class CSPRouteProblem:
-    """Dữ liệu đầu vào của bài toán CSP route."""
-
     order_ids: list[str]
     capacity: int
     cost_provider: RouteCostProvider
@@ -40,8 +30,6 @@ class CSPRouteProblem:
 
 @dataclass
 class CSPRouteSearchResult:
-    """Kết quả của solver CSP, gồm route tốt nhất và thống kê tìm kiếm."""
-
     algorithm: str
     best_state: RouteState
     initial_state: RouteState
@@ -57,187 +45,43 @@ class CSPRouteSearchResult:
         return self.best_state.total_cost < self.initial_state.total_cost
 
 
-@dataclass
-class PartialRoute:
-    """Trạng thái route đang xây từng bước trong quá trình backtracking."""
-
-    actions: list[str]
-    waiting: set[str]
-    carrying: set[str]
-    delivered: set[str]
-    current_label: str
-    total_cost: float
+def route_cost_for_order(cost_provider, current_label: str, order_id: str) -> float:
+    pickup = f"P_{order_id}"
+    delivery = f"D_{order_id}"
+    first = cost_provider.get_cost(current_label, pickup)
+    second = cost_provider.get_cost(pickup, delivery)
+    return first + second
 
 
-def make_initial_partial_route(order_ids: Sequence[str]) -> PartialRoute:
-    """Khởi tạo route rỗng: tất cả đơn còn chờ, chưa mang và chưa giao."""
-
-    return PartialRoute(
-        actions=[],
-        waiting=set(order_ids),
-        carrying=set(),
-        delivered=set(),
-        current_label="START",
-        total_cost=0.0,
-    )
-
-
-def get_valid_actions(
-    partial: PartialRoute,
-    capacity: int,
-) -> list[str]:
-    """Liệt kê hành động hợp lệ tiếp theo từ trạng thái partial hiện tại."""
-
-    # Nếu đang cầm hàng thì bắt buộc giao đúng đơn đó trước.
-    if partial.carrying:
-        order_id = sorted(partial.carrying)[0]
-        return [f"D_{order_id}"]
-
-    # Nếu không cầm hàng thì chọn một đơn chưa giao để nhận.
-    actions: list[str] = []
-    for order_id in sorted(partial.waiting):
+def build_actions_from_order_sequence(order_sequence) -> tuple[str, ...]:
+    actions = []
+    for order_id in order_sequence:
         actions.append(f"P_{order_id}")
-
-    return actions
-
-
-def apply_action(
-    partial: PartialRoute,
-    action: str,
-    step_cost: float,
-) -> PartialRoute:
-    """Tạo partial route mới sau khi thực hiện một hành động pickup/delivery."""
-
-    order_id = get_order_id(action)
-
-    waiting = set(partial.waiting)
-    carrying = set(partial.carrying)
-    delivered = set(partial.delivered)
-
-    if is_pickup(action):
-        waiting.remove(order_id)
-        carrying.add(order_id)
-
-    elif is_delivery(action):
-        carrying.remove(order_id)
-        delivered.add(order_id)
-
-    else:
-        raise ValueError(f"Unknown CSP action: {action}")
-
-    return PartialRoute(
-        actions=[*partial.actions, action],
-        waiting=waiting,
-        carrying=carrying,
-        delivered=delivered,
-        current_label=action,
-        total_cost=partial.total_cost + step_cost,
-    )
+        actions.append(f"D_{order_id}")
+    return tuple(actions)
 
 
-def has_forward_solution(
-    partial: PartialRoute,
-    capacity: int,
-    order_count: int,
-) -> bool:
-    """
-    Kiểm tra nhanh sau khi chọn một hành động.
-    """
-    if len(partial.delivered) == order_count:
-        return True
+def ac3_input_ok(order_ids) -> bool:
+    """AC-3 ban don gian: order id phai co va khong trung."""
 
-    return bool(
-        get_valid_actions(
-            partial=partial,
-            capacity=capacity,
-        )
-    )
-
-
-def order_actions(
-    actions: list[str],
-    partial: PartialRoute,
-    problem: CSPRouteProblem,
-    strategy: str,
-) -> list[str]:
-    """
-    Sắp xếp thứ tự thử đơn cho 3 kiểu CSP.
-    """
-    if strategy == "LEXICOGRAPHIC":
-        return sorted(actions)
-
-    if strategy == "NEAREST_COST":
-        def nearest_key(action: str):
-            action_cost = problem.cost_provider.get_cost(partial.current_label, action)
-            return action_cost, action
-
-        return sorted(actions, key=nearest_key)
-
-    if strategy == "AC3_PRIORITY":
-        def ac3_key(action: str):
-            if is_delivery(action):
-                action_type = 0
-            else:
-                action_type = 1
-
-            action_cost = problem.cost_provider.get_cost(partial.current_label, action)
-            return action_type, action_cost, action
-
-        return sorted(actions, key=ac3_key)
-
-    return actions
-
-
-def make_ac3_domains(order_ids: Sequence[str]) -> dict[str, set[str]]:
-    """Tạo domain đơn giản: mỗi pickup/delivery chỉ thuộc đúng order_id của nó."""
-
-    domains: dict[str, set[str]] = {}
+    seen = set()
     for order_id in order_ids:
-        domains[f"P_{order_id}"] = {order_id}
-        domains[f"D_{order_id}"] = {order_id}
-    return domains
-
-
-def make_ac3_queue(order_ids: Sequence[str]) -> list[tuple[str, str]]:
-    """Tạo hàng đợi cung ràng buộc giữa pickup và delivery của cùng một đơn."""
-
-    queue: list[tuple[str, str]] = []
-    for order_id in order_ids:
-        queue.append((f"P_{order_id}", f"D_{order_id}"))
-        queue.append((f"D_{order_id}", f"P_{order_id}"))
-    return queue
-
-
-def revise(domains: dict[str, set[str]], left: str, right: str) -> bool:
-    """Bước revise của AC-3: loại giá trị không còn tương thích."""
-
-    changed = False
-
-    for value in list(domains[left]):
-        if value not in domains[right]:
-            domains[left].remove(value)
-            changed = True
-
-    return changed
-
-
-def run_ac3_precheck(order_ids: Sequence[str]) -> bool:
-    """Chạy AC-3 trước khi backtracking để phát hiện miền rỗng sớm."""
-
-    for order_id in order_ids:
-        if not order_id:
+        if not order_id or order_id in seen:
             return False
-
-    domains = make_ac3_domains(order_ids)
-    queue = make_ac3_queue(order_ids)
-
-    while queue:
-        left, right = queue.pop(0)
-        if revise(domains, left, right):
-            if not domains[left]:
-                return False
-
+        seen.add(order_id)
     return True
+
+
+def sort_next_orders(order_ids, current_label, cost_provider, strategy):
+    order_ids = list(order_ids)
+
+    if strategy == "LEXICOGRAPHIC":
+        return sorted(order_ids)
+
+    def cost_key(order_id):
+        return route_cost_for_order(cost_provider, current_label, order_id), order_id
+
+    return sorted(order_ids, key=cost_key)
 
 
 def solve_csp_route(
@@ -248,15 +92,12 @@ def solve_csp_route(
     use_ac3_precheck: bool,
     max_expanded_nodes: int,
 ) -> CSPRouteSearchResult:
-    """Solver chung cho Backtracking, Forward Checking và AC3_Backtracking."""
-
     started_at = perf_counter()
 
-    if use_ac3_precheck and not run_ac3_precheck(problem.order_ids):
-        raise ValueError("AC-3 preprocessing failed.")
+    if use_ac3_precheck and not ac3_input_ok(problem.order_ids):
+        raise ValueError("AC3 precheck failed.")
 
     initial_actions = build_default_route_actions(problem.order_ids)
-
     initial_state = make_route_state(
         actions=initial_actions,
         order_ids=problem.order_ids,
@@ -273,11 +114,7 @@ def solve_csp_route(
     backtracks = 0
     stopped_by_limit = False
 
-    order_count = len(problem.order_ids)
-
-    def backtrack(partial: PartialRoute) -> None:
-        """Hàm đệ quy xây route; mỗi tầng chọn một hành động hợp lệ."""
-
+    def backtrack(order_sequence, remaining_orders, current_label, current_cost):
         nonlocal best_state
         nonlocal best_cost
         nonlocal iterations
@@ -293,77 +130,61 @@ def solve_csp_route(
         iterations += 1
         expanded_nodes += 1
 
-        # Branch and bound: route đang xây đã đắt hơn best hiện tại thì không cần đi sâu.
-        if partial.total_cost >= best_cost:
+        if current_cost >= best_cost:
             backtracks += 1
             return
 
-        # Khi đã giao hết đơn, biến partial route thành RouteState hoàn chỉnh để so sánh.
-        if len(partial.delivered) == order_count:
-            candidate_state = make_route_state(
-                actions=partial.actions,
+        if not remaining_orders:
+            actions = build_actions_from_order_sequence(order_sequence)
+            candidate = make_route_state(
+                actions=actions,
                 order_ids=problem.order_ids,
                 capacity=problem.capacity,
                 cost_provider=problem.cost_provider,
             )
 
-            if candidate_state.is_valid and candidate_state.total_cost < best_cost:
-                best_state = candidate_state
-                best_cost = candidate_state.total_cost
-
+            if candidate.is_valid and candidate.total_cost < best_cost:
+                best_state = candidate
+                best_cost = candidate.total_cost
             return
 
-        actions = get_valid_actions(
-            partial=partial,
-            capacity=problem.capacity,
+        next_orders = sort_next_orders(
+            remaining_orders,
+            current_label,
+            problem.cost_provider,
+            action_strategy,
         )
+        generated_nodes += len(next_orders)
 
-        generated_nodes += len(actions)
-
-        if not actions:
-            backtracks += 1
-            return
-
-        # Tùy thuật toán mà thứ tự thử hành động khác nhau.
-        ordered_actions = order_actions(
-            actions=actions,
-            partial=partial,
-            problem=problem,
-            strategy=action_strategy,
-        )
-
-        for action in ordered_actions:
-            step_cost = problem.cost_provider.get_cost(
-                partial.current_label,
-                action,
-            )
+        for order_id in next_orders:
+            step_cost = route_cost_for_order(problem.cost_provider, current_label, order_id)
 
             if step_cost == float("inf"):
                 backtracks += 1
                 continue
 
-            # Sinh trạng thái con sau khi chọn action hiện tại.
-            next_partial = apply_action(
-                partial=partial,
-                action=action,
-                step_cost=step_cost,
-            )
-
-            # Forward checking: nếu sau action này không còn cách đi tiếp thì cắt sớm.
-            if use_forward_checking and not has_forward_solution(
-                partial=next_partial,
-                capacity=problem.capacity,
-                order_count=order_count,
-            ):
+            new_cost = current_cost + step_cost
+            if use_forward_checking and new_cost >= best_cost:
                 backtracks += 1
                 continue
 
-            backtrack(next_partial)
+            new_remaining = [item for item in remaining_orders if item != order_id]
+            backtrack(
+                order_sequence=[*order_sequence, order_id],
+                remaining_orders=new_remaining,
+                current_label=f"D_{order_id}",
+                current_cost=new_cost,
+            )
 
             if stopped_by_limit:
                 return
 
-    backtrack(make_initial_partial_route(problem.order_ids))
+    backtrack(
+        order_sequence=[],
+        remaining_orders=list(problem.order_ids),
+        current_label="START",
+        current_cost=0.0,
+    )
 
     return CSPRouteSearchResult(
         algorithm=algorithm,

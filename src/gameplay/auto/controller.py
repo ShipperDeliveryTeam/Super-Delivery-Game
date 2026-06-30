@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import random
-from heapq import heappop, heappush
+from src.ai.pathfinding.grid_search import dijkstra_grid_path
 from src.core.game_state import GameState
 from src.core.constants import TILE_SIZE
 from src.entities.directional_shipper import DirectionalShipper
@@ -407,10 +407,11 @@ class AutoModeMixin:
         revealed.add(base_pos)
         self.auto_visual_revealed_traps = revealed
 
+        npc.auto_visual_trap_hits = int(getattr(npc, "auto_visual_trap_hits", 0)) + 1
+
         waits = getattr(self, "auto_visual_trap_wait_until", {})
         waits[npc.name] = float(getattr(self, "elapsed_time", 0.0)) + 5.0
         self.auto_visual_trap_wait_until = waits
-        npc.auto_visual_trap_hits = int(getattr(npc, "auto_visual_trap_hits", 0)) + 1
         return True
 
     def _auto_visual_replan_around_revealed_traps(
@@ -473,41 +474,12 @@ class AutoModeMixin:
             return [start]
 
         graph = AutoMapGraph(map_data)
-        frontier: list[tuple[float, int, tuple[int, int]]] = []
-        order = 0
-        heappush(frontier, (0.0, order, start))
-        parent: dict[tuple[int, int], tuple[int, int] | None] = {start: None}
-        cost: dict[tuple[int, int], float] = {start: 0.0}
-
-        while frontier:
-            _, _, current = heappop(frontier)
-
-            if current == goal:
-                break
-
-            for next_pos, step_cost in graph.get_neighbors(current):
-                next_pos = tuple(next_pos)
-                if next_pos in blocked:
-                    continue
-
-                new_cost = cost[current] + step_cost
-                if new_cost >= cost.get(next_pos, float("inf")):
-                    continue
-
-                cost[next_pos] = new_cost
-                parent[next_pos] = current
-                order += 1
-                heappush(frontier, (new_cost, order, next_pos))
-
-        if goal not in parent:
-            return []
-
-        segment = []
-        current: tuple[int, int] | None = goal
-        while current is not None:
-            segment.append(current)
-            current = parent[current]
-        segment.reverse()
+        segment, _ = dijkstra_grid_path(
+            start=start,
+            goal=goal,
+            get_neighbors=graph.get_neighbors,
+            blocked=blocked,
+        )
         return segment
 
     def _draw_auto_visual_locations(self, bounce_offset: float) -> None:

@@ -11,6 +11,8 @@ from dataclasses import dataclass
 from time import perf_counter
 from typing import Callable
 
+from src.ai.pathfinding.search_common import is_goal
+
 
 GridPos = tuple[int, int]
 NeighborFn = Callable[[GridPos], list[GridPos]]
@@ -46,7 +48,7 @@ def steepest_hill(
 
     for _ in range(max_steps):
         expanded += 1
-        if current == goal:
+        if is_goal(current, goal):
             break
 
         current_h = heuristic(current)
@@ -61,7 +63,7 @@ def steepest_hill(
             if neighbor_h < best_h:
                 best_h = neighbor_h
                 best_neighbors = [neighbor]
-            elif neighbor_h == best_h and neighbor_h <= current_h:
+            elif neighbor_h == best_h and neighbor_h < current_h:
                 best_neighbors.append(neighbor)
 
         # Không có neighbor nào tốt hơn hoặc ngang đủ điều kiện thì dừng.
@@ -74,7 +76,7 @@ def steepest_hill(
     return LocalPathResult(
         algorithm="STEEPEST_HILL",
         path=path,
-        found=path[-1] == goal,
+        found=is_goal(path[-1], goal),
         expanded_nodes=expanded,
         generated_nodes=generated,
         runtime_ms=(perf_counter() - started_at) * 1000,

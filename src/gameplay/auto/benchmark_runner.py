@@ -7,7 +7,7 @@ from src.gameplay.auto.algorithm_groups import (
 from src.gameplay.auto.config import get_auto_map_config
 from src.gameplay.auto.complex_traps import build_trap_setup
 from src.gameplay.auto.models import AutoModeType, RunResult
-from src.gameplay.auto.delivery_search import delivery_search
+from src.ai.pathfinding.delivery_search import delivery_search
 from src.gameplay.auto.order_factory import load_orders_for_map
 from src.gameplay.auto.maps.tmx_loader import load_auto_map
 from src.gameplay.auto.planner import build_plan_for_map
@@ -143,19 +143,24 @@ def run_complex_search_benchmark_algorithm(
     if algorithm == "NO_OBSERVATION":
         result = no_observation_search(
             order_ids=order_ids,
-            possible_traps=trap_setup.possible_traps,
             capacity=config.capacity,
             max_traps=max_traps,
+            map_data=map_data,
+            orders=orders,
+            true_traps=trap_setup.traps,
         )
 
     elif algorithm == "PARTIAL_OBSERVATION":
         result = partial_observation_search(
             order_ids=order_ids,
             possible_traps=trap_setup.possible_traps,
-            known_traps=trap_setup.traps[:2],
+            known_traps=trap_setup.traps[:1],
             capacity=config.capacity,
             max_iterations=100,
             max_traps=max_traps,
+            map_data=map_data,
+            orders=orders,
+            true_traps=trap_setup.traps,
         )
 
     elif algorithm == "AND_OR_SEARCH":
@@ -172,16 +177,19 @@ def run_complex_search_benchmark_algorithm(
     else:
         raise ValueError(f"Unsupported complex search algorithm: {algorithm}")
 
+    success = bool(getattr(result, "success", True))
+    completed_orders = len(orders) if success else 0
+
     return _build_run_result(
         map_id=map_id,
         group_id=group_id,
         algorithm=algorithm,
         total_orders=len(orders),
-        completed_orders=len(orders),
+        completed_orders=completed_orders,
         total_cost=result.normal_cost,
         expanded_nodes=result.expanded_nodes,
         runtime_ms=result.runtime_ms,
-        success=True,
+        success=success,
     )
     
 def run_csp_benchmark_algorithm(

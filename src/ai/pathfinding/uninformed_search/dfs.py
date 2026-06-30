@@ -7,7 +7,7 @@ hơn BFS nhưng không đảm bảo đường đi ngắn nhất.
 """
 
 from time import perf_counter
-from src.ai.pathfinding.search_common import SearchResult, reconstruct_path
+from src.ai.pathfinding.search_common import SearchResult, is_goal, reconstruct_path
 
 def dfs(start, goal, get_neighbors, max_depth=5000) -> SearchResult:
     """Tìm đường bằng stack LIFO và giới hạn độ sâu để tránh lặp vô hạn."""
@@ -34,14 +34,14 @@ def dfs(start, goal, get_neighbors, max_depth=5000) -> SearchResult:
 
         expanded_nodes += 1
 
-        if current == goal:
-            path = reconstruct_path(parent, goal)
+        if is_goal(current, goal):
+            path = reconstruct_path(parent, current)
 
             return SearchResult(
 
                 algorithm="DFS",
                 path=path,
-                cost=step[goal],
+                cost=step[current],
                 expanded_nodes=expanded_nodes,
                 generated_nodes=generated_nodes,
                 runtime_ms=(perf_counter() - started_at) * 1000,

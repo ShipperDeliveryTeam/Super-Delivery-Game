@@ -14,14 +14,13 @@ from src.ai.pathfinding.adversarial.game_state import (
 )
 from src.ai.pathfinding.adversarial.minimax import minimax_search
 from src.ai.pathfinding.complex_search import and_or_search, no_observation_search, partial_observation_search
-from src.ai.pathfinding.complex_search.no_observation import union_belief_traps
 from src.ai.pathfinding.csp.ac3_backtracking import ac3_backtracking_search
 from src.ai.pathfinding.csp.backtracking import backtracking_search
 from src.ai.pathfinding.csp.forward_checking import forward_checking_search
 from src.gameplay.auto.algorithm_groups import get_algorithms_by_group, get_group_name
 from src.gameplay.auto.config import get_auto_map_config
 from src.gameplay.auto.complex_traps import build_trap_setup
-from src.gameplay.auto.delivery_search import delivery_search
+from src.ai.pathfinding.delivery_search import delivery_search
 from src.gameplay.auto.maps.tmx_loader import GridPos, load_auto_map
 from src.gameplay.auto.order_factory import load_orders_for_map
 from src.gameplay.auto.route_cost_matrix import RouteCostMatrix, build_route_cost_matrix
@@ -104,6 +103,17 @@ def _cost_from_actions(matrix: RouteCostMatrix, actions: Iterable[str]) -> float
         current_label = action
 
     return total_cost
+
+
+def _display_traps_from_cases(belief_states) -> tuple[GridPos, ...]:
+    """Gop trap chi de hien thi cac case cua AND-OR."""
+
+    traps: list[GridPos] = []
+    for belief in belief_states:
+        for trap in belief.traps:
+            if trap not in traps:
+                traps.append(trap)
+    return tuple(traps)
 
 
 def _best_greedy_order(
@@ -248,26 +258,73 @@ def _build_complex_astar_plan(
     if algorithm == "NO_OBSERVATION":
         complex_result = no_observation_search(
             order_ids=order_ids,
-            possible_traps=trap_setup.possible_traps,
             max_traps=len(trap_setup.traps),
+            map_data=map_data,
+            orders=orders,
+            true_traps=active_traps,
         )
-        astar_traps = union_belief_traps(complex_result.belief_states)
+        astar_traps = complex_result.selected_traps
     elif algorithm == "PARTIAL_OBSERVATION":
-        known_traps = trap_setup.traps[:2]
+        known_traps = trap_setup.traps[:1]
         complex_result = partial_observation_search(
             order_ids=order_ids,
             possible_traps=trap_setup.possible_traps,
             known_traps=known_traps,
             max_traps=len(trap_setup.traps),
+            map_data=map_data,
+            orders=orders,
+            true_traps=active_traps,
         )
-        astar_traps = union_belief_traps(complex_result.belief_states)
+        astar_traps = complex_result.selected_traps
     else:
         complex_result = and_or_search(
             order_ids=order_ids,
             possible_traps=trap_setup.possible_traps,
             max_traps=len(trap_setup.traps),
         )
-        astar_traps = union_belief_traps(complex_result.belief_states)
+        astar_traps = _display_traps_from_cases(complex_result.belief_states)
+
+    if algorithm in ("NO_OBSERVATION", "PARTIAL_OBSERVATION"):
+        selected_index = complex_result.selected_belief_index
+        selected_path = [map_data.start_position]
+        selected_actions = complex_result.actions
+        selected_cost = complex_result.normal_cost
+
+        if complex_result.belief_paths:
+            selected_path = list(complex_result.belief_paths[selected_index])
+        if complex_result.belief_actions:
+            selected_actions = complex_result.belief_actions[selected_index]
+        if complex_result.belief_costs:
+            selected_cost = complex_result.belief_costs[selected_index]
+
+        hit_note = ""
+        if complex_result.failed_on_trap is not None:
+            hit_note = f", co the di qua bay {complex_result.failed_on_trap}"
+
+        note = (
+            f"{complex_result.risk_mode}, "
+            f"chon B{selected_index + 1}, "
+            f"A* doan {len(astar_traps)} bay{hit_note}"
+        )
+
+        return AutoVisualAgentPlan(
+            group_id=group_id,
+            group_name=group_name,
+            algorithm=algorithm,
+            actions=selected_actions,
+            path=selected_path or [map_data.start_position],
+            total_cost=selected_cost,
+            expanded_nodes=complex_result.expanded_nodes,
+            runtime_ms=(perf_counter() - started_at) * 1000,
+            note=note,
+            hidden_traps=active_traps,
+            belief_traps=astar_traps,
+            belief_states=tuple(belief.traps for belief in complex_result.belief_states),
+            known_traps=complex_result.known_traps,
+            belief_count=len(complex_result.belief_states),
+            alternative_paths=complex_result.belief_paths,
+            alternative_actions=complex_result.belief_actions,
+        )
 
     alternative_paths: list[tuple[GridPos, ...]] = []
     alternative_actions: list[tuple[str, ...]] = []

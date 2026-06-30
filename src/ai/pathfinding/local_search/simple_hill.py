@@ -2,14 +2,17 @@ from __future__ import annotations
 
 """Simple Hill Climbing.
 
-Thuật toán leo đồi đơn giản chỉ nhìn các hàng xóm hiện tại và chọn hướng làm
-heuristic tốt hơn. Nó chạy nhanh nhưng dễ kẹt ở local optimum hoặc plateau.
+Moi buoc chi chon ngau nhien 1 node con de thu.
+Neu node con tot hon node hien tai thi di tiep.
+Neu khong tot hon thi dung tai local optimum.
 """
 
 import random
 from dataclasses import dataclass
 from time import perf_counter
 from typing import Callable
+
+from src.ai.pathfinding.search_common import is_goal
 
 
 GridPos = tuple[int, int]
@@ -19,8 +22,6 @@ HeuristicFn = Callable[[GridPos], float]
 
 @dataclass
 class LocalPathResult:
-    """Kết quả chuẩn cho các thuật toán local search."""
-
     algorithm: str
     path: list[GridPos]
     found: bool
@@ -36,8 +37,6 @@ def simple_hill(
     heuristic: HeuristicFn,
     max_steps: int = 1000,
 ) -> LocalPathResult:
-    """Di chuyển từng bước tới neighbor có heuristic tốt hơn hiện tại."""
-
     started_at = perf_counter()
     current = start
     path = [start]
@@ -46,36 +45,32 @@ def simple_hill(
 
     for _ in range(max_steps):
         expanded += 1
-        if current == goal:
+
+        if is_goal(current, goal):
+            break
+
+        neighbors = get_neighbors(current)
+
+        if not neighbors:
             break
 
         current_h = heuristic(current)
-        best_h = current_h
-        best_neighbors = []
+        neighbor = random.choice(neighbors)
+        generated += 1
+        neighbor_h = heuristic(neighbor)
 
-        for neighbor in get_neighbors(current):
-            generated += 1
-            neighbor_h = heuristic(neighbor)
-
-            # Chỉ nhận neighbor nếu nó không tệ hơn điểm hiện tại.
-            if neighbor_h < best_h:
-                best_h = neighbor_h
-                best_neighbors = [neighbor]
-            elif neighbor_h == best_h and neighbor_h <= current_h:
-                best_neighbors.append(neighbor)
-
-        # Không còn hướng tốt hơn: thuật toán dừng tại local optimum.
-        if not best_neighbors:
+        # Simple hill chi thu mot node con ngau nhien.
+        # Neu node do khong tot hon thi dung.
+        if neighbor_h >= current_h:
             break
 
-        # Nếu có nhiều lựa chọn ngang nhau, chọn ngẫu nhiên để tránh hành vi quá cứng.
-        current = random.choice(best_neighbors)
+        current = neighbor
         path.append(current)
 
     return LocalPathResult(
         algorithm="SIMPLE_HILL",
         path=path,
-        found=path[-1] == goal,
+        found=is_goal(path[-1], goal),
         expanded_nodes=expanded,
         generated_nodes=generated,
         runtime_ms=(perf_counter() - started_at) * 1000,

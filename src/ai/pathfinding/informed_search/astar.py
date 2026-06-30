@@ -10,7 +10,7 @@ A* kết hợp chi phí đã đi `g(n)` và ước lượng còn lại `h(n)`. �
 from heapq import heappop, heappush
 from time import perf_counter
 
-from src.ai.pathfinding.search_common import SearchResult, reconstruct_path
+from src.ai.pathfinding.search_common import SearchResult, is_goal, reconstruct_path
 
 
 def astar(start, goal, get_neighbors, heuristic) -> SearchResult:
@@ -33,10 +33,10 @@ def astar(start, goal, get_neighbors, heuristic) -> SearchResult:
         _, _, current = heappop(queue)
         expanded_nodes += 1
 
-        if current == goal:
-            path = reconstruct_path(parent, goal)
+        if is_goal(current, goal):
+            path = reconstruct_path(parent, current)
             runtime = (perf_counter() - started_at) * 1000
-            return SearchResult("ASTAR", path, cost[goal], expanded_nodes, generated_nodes, runtime)
+            return SearchResult("ASTAR", path, cost[current], expanded_nodes, generated_nodes, runtime)
 
         for next_pos, step_cost in get_neighbors(current):
             new_cost = cost[current] + step_cost

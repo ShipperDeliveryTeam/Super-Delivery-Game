@@ -8,7 +8,7 @@ cùng chi phí, BFS đảm bảo tìm được đường có ít bước nhất.
 
 from collections import deque
 from time import perf_counter
-from src.ai.pathfinding.search_common import SearchResult, reconstruct_path
+from src.ai.pathfinding.search_common import SearchResult, is_goal, reconstruct_path
 
 def bfs(start, goal, get_neighbors) -> SearchResult:
     """Tìm đường bằng hàng đợi FIFO: node vào trước sẽ được mở rộng trước."""
@@ -30,15 +30,15 @@ def bfs(start, goal, get_neighbors) -> SearchResult:
 
         expanded_nodes += 1
 
-        if current == goal:
-            path = reconstruct_path(parent, goal)
+        if is_goal(current, goal):
+            path = reconstruct_path(parent, current)
 
             return SearchResult(
 
                 algorithm="BFS",
 
                 path=path,
-                cost=step[goal],
+                cost=step[current],
                 expanded_nodes=expanded_nodes,
                 generated_nodes=generated_nodes,
                 runtime_ms=(perf_counter() - started_at) * 1000,
