@@ -1,3 +1,5 @@
+"""Nhóm CSP: Backtracking, Forward Checking, AC3 Backtracking."""
+
 from src.ai.pathfinding.csp.backtracking import backtracking_search
 from src.ai.pathfinding.csp.forward_checking import forward_checking_search
 from src.ai.pathfinding.csp.ac3_backtracking import ac3_backtracking_search

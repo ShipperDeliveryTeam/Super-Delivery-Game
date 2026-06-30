@@ -1,5 +1,12 @@
 from __future__ import annotations
 
+"""Mô hình route dùng cho local search và CSP.
+
+Trong auto mode, một route không chỉ là các ô trên bản đồ mà còn là chuỗi hành
+động nhận đơn/giao đơn: P_O1, D_O1, P_O2, D_O2... File này cung cấp hàm đánh
+giá route và sinh neighbor bằng cách hoán đổi thứ tự đơn hàng.
+"""
+
 import random
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -7,12 +14,16 @@ from typing import Protocol
 
 
 class RouteCostProvider(Protocol):
+    """Interface tối thiểu để hỏi chi phí giữa hai nhãn hành động."""
+
     def get_cost(self, from_label: str, to_label: str) -> float:
         ...
 
 
 @dataclass(frozen=True)
 class RouteEvaluation:
+    """Kết quả đánh giá một chuỗi hành động giao hàng."""
+
     actions: tuple[str, ...]
     total_cost: float
     is_valid: bool
@@ -21,12 +32,16 @@ class RouteEvaluation:
 
 @dataclass(frozen=True)
 class RouteState:
+    """Một trạng thái route kèm tổng chi phí và cờ hợp lệ."""
+
     actions: tuple[str, ...]
     total_cost: float
     is_valid: bool
     reason: str = ""
 
     def better_than(self, other: "RouteState") -> bool:
+        """So sánh hai route: route hợp lệ luôn tốt hơn route không hợp lệ."""
+
         if self.is_valid and not other.is_valid:
             return True
 
@@ -71,6 +86,8 @@ def validate_route_actions(
     order_ids: Sequence[str],
     capacity: int,
 ) -> tuple[bool, str]:
+    """Kiểm tra route có đúng luật nhận rồi giao từng đơn hay không."""
+
     expected = build_default_route_actions(get_order_sequence(actions))
 
     if tuple(actions) != expected:
@@ -99,6 +116,8 @@ def evaluate_route(
     capacity: int,
     cost_provider: RouteCostProvider,
 ) -> RouteEvaluation:
+    """Tính tổng chi phí cho route dựa trên cost provider của bản đồ."""
+
     is_valid, reason = validate_route_actions(
         actions=actions,
         order_ids=order_ids,
@@ -159,6 +178,8 @@ def generate_order_swap_neighbors(
     capacity: int,
     cost_provider: RouteCostProvider,
 ) -> list[RouteState]:
+    """Sinh neighbor bằng cách đổi vị trí hai đơn trong thứ tự giao."""
+
     neighbors: list[RouteState] = []
     order_sequence = get_order_sequence(state.actions)
 
@@ -187,6 +208,8 @@ def random_valid_route_actions(
     capacity: int,
     rng: random.Random,
 ) -> tuple[str, ...]:
+    """Tạo một route hợp lệ ngẫu nhiên bằng cách xáo thứ tự đơn hàng."""
+
     sequence = list(order_ids)
     rng.shuffle(sequence)
     return build_default_route_actions(sequence)

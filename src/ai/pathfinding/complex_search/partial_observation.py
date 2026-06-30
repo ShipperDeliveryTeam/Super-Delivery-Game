@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+"""Partial Observation Search.
+
+Thuật toán này mô phỏng trường hợp shipper biết trước một phần thông tin bẫy.
+Trong game, hai bẫy đầu tiên được coi là đã biết và xuất hiện trong mọi belief.
+"""
+
 from time import perf_counter
 
 from src.ai.pathfinding.complex_search.no_observation import make_belief_states, make_result
@@ -13,6 +19,8 @@ def partial_observation_search(
     max_iterations=100,
     max_traps=None,
 ):
+    """Tạo belief state với một phần bẫy đã biết trước."""
+
     started_at = perf_counter()
 
     # Biết trước 2 bẫy thật. Hai bẫy này luôn nằm trong mọi belief state.

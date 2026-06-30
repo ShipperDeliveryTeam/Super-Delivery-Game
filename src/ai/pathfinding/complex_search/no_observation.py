@@ -1,5 +1,12 @@
 from __future__ import annotations
 
+"""Tìm kiếm khi không quan sát được bẫy (No Observation).
+
+Trong nhóm complex search, game không biết chính xác bẫy nằm ở đâu. Vì vậy
+thuật toán tạo ra các `BeliefState`: mỗi belief là một giả thuyết về tập bẫy
+có thể xuất hiện, rồi đánh giá route theo chi phí rủi ro.
+"""
+
 import random
 from dataclasses import dataclass
 from time import perf_counter
@@ -7,12 +14,16 @@ from time import perf_counter
 
 @dataclass
 class BeliefState:
+    """Một giả thuyết về vị trí bẫy trên bản đồ."""
+
     name: str
     traps: tuple[tuple[int, int], ...]
 
 
 @dataclass
 class ComplexSearchResult:
+    """Kết quả chung cho các thuật toán có belief state/rủi ro."""
+
     algorithm: str
     actions: tuple[str, ...]
     normal_cost: float
@@ -27,6 +38,8 @@ class ComplexSearchResult:
 
 
 def make_actions(order_ids):
+    """Tạo chuỗi hành động mặc định: nhận đơn rồi giao ngay từng đơn."""
+
     actions = []
     for order_id in order_ids:
         actions.append(f"P_{order_id}")
@@ -35,6 +48,8 @@ def make_actions(order_ids):
 
 
 def _seed_from_traps(possible_traps, known_traps=()):
+    """Tạo seed ổn định để cùng một map cho ra belief state lặp lại được."""
+
     total = 0
     for x, y in list(possible_traps) + list(known_traps):
         total += x * 31 + y * 17
@@ -42,6 +57,8 @@ def _seed_from_traps(possible_traps, known_traps=()):
 
 
 def make_belief_states(possible_traps, known_traps=(), max_traps=None):
+    """Sinh các belief state dựa trên bẫy có thể có và bẫy đã biết."""
+
     possible_traps = list(possible_traps)
     known_traps = tuple(known_traps)
 
@@ -58,6 +75,7 @@ def make_belief_states(possible_traps, known_traps=(), max_traps=None):
     max_count = max(1, max_count)
 
     for index in range(2):
+        # Mỗi belief chọn một số lượng bẫy giả định khác nhau để mô phỏng bất định.
         min_count = max(1, len(known_traps))
         trap_count = rng.randint(min_count, max_count)
 
@@ -77,6 +95,8 @@ def make_belief_states(possible_traps, known_traps=(), max_traps=None):
 
 
 def union_belief_traps(belief_states):
+    """Gộp tất cả bẫy xuất hiện trong mọi belief state."""
+
     traps = []
     for belief in belief_states:
         for trap in belief.traps:
@@ -86,6 +106,8 @@ def union_belief_traps(belief_states):
 
 
 def belief_cost(actions, belief_states):
+    """Chi phí quyết định = chi phí thường + chi phí rủi ro từ belief state."""
+
     normal_cost = len(actions) * 10
     risk_cost = 0
 
@@ -96,6 +118,8 @@ def belief_cost(actions, belief_states):
 
 
 def make_result(algorithm, order_ids, risk_mode, belief_states, known_traps, started_at):
+    """Đóng gói kết quả để các thuật toán complex trả về cùng một cấu trúc."""
+
     actions = make_actions(order_ids)
     normal_cost = len(actions) * 10
     decision_cost = belief_cost(actions, belief_states)
@@ -116,6 +140,8 @@ def make_result(algorithm, order_ids, risk_mode, belief_states, known_traps, sta
 
 
 def no_observation_search(order_ids, possible_traps=(), capacity=1, max_traps=None):
+    """Chạy No Observation: không biết bẫy nào là thật nên tạo belief từ toàn bộ bẫy có thể."""
+
     started_at = perf_counter()
 
     # Không biết bẫy ở đâu: tạo 2 belief state, mỗi belief có nhiều bẫy giả định.

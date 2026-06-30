@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+"""Simple Hill Climbing.
+
+Thuật toán leo đồi đơn giản chỉ nhìn các hàng xóm hiện tại và chọn hướng làm
+heuristic tốt hơn. Nó chạy nhanh nhưng dễ kẹt ở local optimum hoặc plateau.
+"""
+
 import random
 from dataclasses import dataclass
 from time import perf_counter
@@ -13,6 +19,8 @@ HeuristicFn = Callable[[GridPos], float]
 
 @dataclass
 class LocalPathResult:
+    """Kết quả chuẩn cho các thuật toán local search."""
+
     algorithm: str
     path: list[GridPos]
     found: bool
@@ -28,6 +36,8 @@ def simple_hill(
     heuristic: HeuristicFn,
     max_steps: int = 1000,
 ) -> LocalPathResult:
+    """Di chuyển từng bước tới neighbor có heuristic tốt hơn hiện tại."""
+
     started_at = perf_counter()
     current = start
     path = [start]
@@ -47,15 +57,18 @@ def simple_hill(
             generated += 1
             neighbor_h = heuristic(neighbor)
 
+            # Chỉ nhận neighbor nếu nó không tệ hơn điểm hiện tại.
             if neighbor_h < best_h:
                 best_h = neighbor_h
                 best_neighbors = [neighbor]
             elif neighbor_h == best_h and neighbor_h <= current_h:
                 best_neighbors.append(neighbor)
 
+        # Không còn hướng tốt hơn: thuật toán dừng tại local optimum.
         if not best_neighbors:
             break
 
+        # Nếu có nhiều lựa chọn ngang nhau, chọn ngẫu nhiên để tránh hành vi quá cứng.
         current = random.choice(best_neighbors)
         path.append(current)
 

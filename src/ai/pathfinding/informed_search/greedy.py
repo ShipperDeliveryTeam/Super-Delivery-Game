@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+"""Greedy Best-First Search.
+
+Greedy chỉ ưu tiên node có heuristic nhỏ nhất, tức là node trông có vẻ gần
+goal nhất. Thuật toán thường nhanh nhưng không đảm bảo tối ưu chi phí.
+"""
+
 from heapq import heappop, heappush
 from time import perf_counter
 
@@ -7,6 +13,8 @@ from src.ai.pathfinding.search_common import SearchResult, reconstruct_path
 
 
 def greedy_best_first_search(start, goal, get_neighbors, heuristic) -> SearchResult:
+    """Tìm đường bằng cách luôn chọn ô có khoảng cách ước lượng tới goal nhỏ nhất."""
+
     started_at = perf_counter()
 
     queue = []
@@ -26,6 +34,7 @@ def greedy_best_first_search(start, goal, get_neighbors, heuristic) -> SearchRes
         if current in reached:
             continue
 
+        # Greedy đánh dấu đã xử lý để không quay lại node cũ.
         reached.add(current)
         expanded_nodes += 1
 
@@ -44,6 +53,7 @@ def greedy_best_first_search(start, goal, get_neighbors, heuristic) -> SearchRes
                 generated_nodes += 1
 
             order += 1
+            # Chỉ dùng h-score, không cộng chi phí đã đi như A*.
             h_score = heuristic(next_pos, goal)
             heappush(queue, (h_score, order, next_pos))
 

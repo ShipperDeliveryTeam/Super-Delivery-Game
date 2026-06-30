@@ -1,5 +1,12 @@
 from __future__ import annotations
 
+"""Mô hình trạng thái cho nhóm thuật toán đối kháng.
+
+Nhóm này coi việc chọn đơn như một trò chơi hai người: Player cố tăng điểm
+của mình, Opponent cố làm giảm lợi thế đó. Minimax, Alpha-Beta và Expectimax
+đều dùng chung state, hàm sinh action và hàm utility trong file này.
+"""
+
 from dataclasses import dataclass
 from time import perf_counter
 from typing import Protocol
@@ -13,6 +20,8 @@ OPPONENT_TURN = "OPPONENT"
 
 
 class AdversarialSearchFn(Protocol):
+    """Kiểu hàm chuẩn của một thuật toán adversarial search."""
+
     def __call__(
         self,
         order_ids: list[str],
@@ -25,6 +34,8 @@ class AdversarialSearchFn(Protocol):
 
 @dataclass(frozen=True)
 class AdversarialGameState:
+    """Một node trong cây game đối kháng."""
+
     remaining_order_ids: tuple[str, ...]
     player_label: str
     opponent_label: str
@@ -36,6 +47,8 @@ class AdversarialGameState:
 
 @dataclass
 class AdversarialSearchStats:
+    """Thống kê số node để báo cáo/so sánh thuật toán."""
+
     expanded_nodes: int = 0
     generated_nodes: int = 0
     pruned_nodes: int = 0
@@ -43,6 +56,8 @@ class AdversarialSearchStats:
 
 @dataclass
 class AdversarialSearchResult:
+    """Kết quả chọn đơn tốt nhất theo thuật toán đối kháng."""
+
     algorithm: str
     best_order_id: str | None
     best_sequence: tuple[str, ...]
@@ -58,6 +73,8 @@ class AdversarialSearchResult:
 
 
 def build_initial_state(order_ids: list[str]) -> AdversarialGameState:
+    """Tạo trạng thái gốc: cả hai người chơi bắt đầu từ START và chưa có điểm."""
+
     return AdversarialGameState(
         remaining_order_ids=tuple(order_ids),
         player_label="START",
@@ -70,6 +87,8 @@ def build_initial_state(order_ids: list[str]) -> AdversarialGameState:
 
 
 def build_reward_map(orders: list[AutoOrder]) -> dict[str, float]:
+    """Chuyển danh sách order thành map id -> reward để tra cứu nhanh."""
+
     return {
         order.id: float(order.reward)
         for order in orders
@@ -81,6 +100,8 @@ def calculate_order_trip_cost(
     current_label: str,
     order_id: str,
 ) -> float:
+    """Chi phí đi từ vị trí hiện tại tới store rồi tới house của một đơn."""
+
     pickup_label = f"P_{order_id}"
     delivery_label = f"D_{order_id}"
 
@@ -116,6 +137,8 @@ def is_terminal(
     state: AdversarialGameState,
     depth_limit: int,
 ) -> bool:
+    """Node lá nếu hết đơn hoặc đạt giới hạn độ sâu."""
+
     return (
         not state.remaining_order_ids
         or state.depth >= depth_limit
@@ -132,6 +155,8 @@ def evaluate_state(state: AdversarialGameState) -> float:
 
 
 def get_actions(state: AdversarialGameState) -> list[str]:
+    """Action hợp lệ chính là các đơn còn chưa ai chọn."""
+
     return list(state.remaining_order_ids)
 
 
@@ -141,6 +166,8 @@ def apply_action(
     matrix: RouteCostMatrix,
     reward_map: dict[str, float],
 ) -> AdversarialGameState:
+    """Sinh state con sau khi Player hoặc Opponent chọn một đơn."""
+
     remaining = tuple(
         current_order_id
         for current_order_id in state.remaining_order_ids
@@ -148,6 +175,7 @@ def apply_action(
     )
 
     if state.turn == PLAYER_TURN:
+        # Player chọn đơn: cộng gain vào player_score và chuyển lượt cho Opponent.
         gain = calculate_order_gain(
             matrix=matrix,
             reward_map=reward_map,
@@ -165,6 +193,7 @@ def apply_action(
             depth=state.depth + 1,
         )
 
+    # Opponent chọn đơn: cộng gain cho đối thủ và chuyển lượt về Player.
     gain = calculate_order_gain(
         matrix=matrix,
         reward_map=reward_map,

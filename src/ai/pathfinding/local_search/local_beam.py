@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+"""Local Beam Search.
+
+Thay vì chỉ giữ một đường như hill climbing, beam search giữ `beam_width`
+đường tốt nhất ở mỗi vòng. Cách này giảm nguy cơ kẹt ở một nhánh xấu.
+"""
+
 from dataclasses import dataclass
 from time import perf_counter
 from typing import Callable
@@ -12,6 +18,8 @@ HeuristicFn = Callable[[GridPos], float]
 
 @dataclass
 class LocalPathResult:
+    """Kết quả chuẩn cho các thuật toán tìm kiếm cục bộ."""
+
     algorithm: str
     path: list[GridPos]
     found: bool
@@ -28,12 +36,16 @@ def local_beam_search(
     beam_width: int = 5,
     max_steps: int = 1000,
 ) -> LocalPathResult:
+    """Mở rộng nhiều path song song và chỉ giữ lại các path có heuristic tốt nhất."""
+
     started_at = perf_counter()
+    # beam là danh sách các path đang được giữ lại để mở rộng ở vòng sau.
     beam = [[start]]
     expanded = 0
     generated = 0
 
     def path_score(item):
+        """Điểm của path được tính bằng heuristic tại node cuối path."""
         return heuristic(item[-1])
 
     for _ in range(max_steps):
@@ -60,6 +72,7 @@ def local_beam_search(
         if not candidates:
             break
 
+        # Chỉ giữ lại beam_width ứng viên tốt nhất, bỏ các nhánh kém hơn.
         candidates.sort(key=path_score)
         beam = candidates[:beam_width]
 

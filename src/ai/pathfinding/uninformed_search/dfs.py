@@ -1,8 +1,16 @@
 from __future__ import annotations
+
+"""Depth-First Search (DFS).
+
+DFS đi sâu theo một nhánh trước khi quay lui. Thuật toán này ít tốn bộ nhớ
+hơn BFS nhưng không đảm bảo đường đi ngắn nhất.
+"""
+
 from time import perf_counter
 from src.ai.pathfinding.search_common import SearchResult, reconstruct_path
 
 def dfs(start, goal, get_neighbors, max_depth=5000) -> SearchResult:
+    """Tìm đường bằng stack LIFO và giới hạn độ sâu để tránh lặp vô hạn."""
 
     started_at = perf_counter()
     stack = [(start, 0)]
@@ -18,6 +26,7 @@ def dfs(start, goal, get_neighbors, max_depth=5000) -> SearchResult:
 
         current, depth = stack.pop()
 
+        # reached giúp tránh mở rộng lại một node đã xử lý.
         if current in reached:
             continue
 
@@ -42,6 +51,7 @@ def dfs(start, goal, get_neighbors, max_depth=5000) -> SearchResult:
             continue
 
         neighbors = get_neighbors(current)
+        # Đảo thứ tự để khi push vào stack, thứ tự duyệt gần giống danh sách neighbor ban đầu.
         neighbors.reverse()
 
         for next_pos, _ in neighbors:

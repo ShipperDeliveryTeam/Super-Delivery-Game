@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+"""Minimax Search.
+
+Minimax duyệt cây quyết định hai người chơi. Player chọn nhánh có utility lớn
+nhất, Opponent chọn nhánh làm utility nhỏ nhất.
+"""
+
 from time import perf_counter
 
 from src.ai.pathfinding.adversarial.game_state import (
@@ -26,6 +32,8 @@ def _minimax(
     depth_limit: int,
     stats: AdversarialSearchStats,
 ) -> tuple[float, tuple[str, ...]]:
+    """Đệ quy minimax trả về utility tốt nhất và chuỗi đơn tương ứng."""
+
     stats.expanded_nodes += 1
 
     if is_terminal(state, depth_limit):
@@ -35,6 +43,7 @@ def _minimax(
     stats.generated_nodes += len(actions)
 
     if state.turn == PLAYER_TURN:
+        # MAX node: Player muốn tối đa hóa utility.
         best_value = float("-inf")
         best_sequence: tuple[str, ...] = ()
 
@@ -60,6 +69,7 @@ def _minimax(
 
         return best_value, best_sequence
 
+    # MIN node: Opponent muốn làm utility của Player nhỏ nhất.
     best_value = float("inf")
     best_sequence = ()
 
@@ -93,6 +103,8 @@ def minimax_search(
     depth_limit: int = 6,
     initial_state: AdversarialGameState | None = None,
 ) -> AdversarialSearchResult:
+    """Hàm public chạy Minimax và đóng gói kết quả cho benchmark/visualizer."""
+
     started_at = perf_counter()
     reward_map = build_reward_map(orders)
     stats = AdversarialSearchStats()
