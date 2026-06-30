@@ -1,13 +1,19 @@
-"""Adapter tìm đường dùng trực tiếp trong gameplay.
+"""Tim duong tren map cua game.
 
-`GamePathfinder` nhận bản đồ dạng grid, danh sách ô bị chặn và tên thuật toán
-được chọn. Nó chuẩn hóa input/output để Play Mode, NPC và path hint chỉ cần gọi
-`find_path(start, goal, algorithm)` mà không phải biết chi tiết từng thuật toán.
+GamePathfinder giu thong tin cua map:
+- map co bao nhieu cot, bao nhieu hang
+- o nao bi chan
+- co duoc di cheo khong
+- co luat vong xuyen khong
+
+Khi game can tim duong, game goi:
+
+    find_path(start, goal, algorithm)
+
+Ham nay se chon dung thuat toan va tra ve PathResult.
 """
 
-from dataclasses import dataclass
 import random
-from typing import Iterable, List, Optional, Tuple
 
 from src.ai.pathfinding.informed_search.astar import astar as pathfinding_astar
 from src.ai.pathfinding.informed_search.greedy import greedy_best_first_search
@@ -19,191 +25,295 @@ from src.ai.pathfinding.uninformed_search.bfs import bfs as pathfinding_bfs
 from src.ai.pathfinding.uninformed_search.dfs import dfs as pathfinding_dfs
 from src.ai.pathfinding.uninformed_search.ucs import ucs as pathfinding_ucs
 
-GridPos = Tuple[int, int]
 
-
-@dataclass
 class PathResult:
-    """Kết quả gọn cho gameplay: path, số node mở rộng, trạng thái thành công."""
+    """Ket qua ma gameplay can doc."""
 
-    path: List[GridPos]
-    expanded_nodes: int = 0
-    success: bool = False
-    algorithm: str = ""
+    def __init__(self, path, expanded_nodes=0, success=False, algorithm=""):
+        self.path = path
+        self.expanded_nodes = expanded_nodes
+        self.success = success
+        self.algorithm = algorithm
 
 
 class GamePathfinder:
-    """Lớp trung gian giữa game grid và các thuật toán trong `src.ai.pathfinding`."""
+    """Class nay giu map va goi cac thuat toan tim duong."""
 
     def __init__(
         self,
-        cols: int,
-        rows: int,
-        blocked: Optional[set[GridPos]] = None,
-        allow_diagonal: bool = False,
-        roundabout_ring: Optional[Iterable[GridPos]] = None,
-        roundabout_connections: Optional[Iterable[tuple[GridPos, GridPos]]] = None,
+        cols,
+        rows,
+        blocked=None,
+        allow_diagonal=False,
+        roundabout_ring=None,
+        roundabout_connections=None,
     ):
-        # Kích thước bản đồ và tập ô bị chặn là dữ liệu nền cho mọi thuật toán.
         self.cols = cols
         self.rows = rows
         self.blocked = blocked or set()
         self.allow_diagonal = bool(allow_diagonal)
-        # Roundabout là luật di chuyển đặc biệt của một số map.
+
+        # Mot so map co vong xuyen nen can luu them luat di rieng.
         self.roundabout_ring = tuple(roundabout_ring or ())
         self._roundabout_nodes = set(self.roundabout_ring)
-        self._roundabout_connection_edges = {
-            self._edge_key(a, b) for a, b in (roundabout_connections or ())
-        }
+
+        self._roundabout_connection_edges = set()
+        for a, b in (roundabout_connections or ()):
+            self._roundabout_connection_edges.add(self._edge_key(a, b))
+
         self._roundabout_edges = self._build_roundabout_edges()
-        self._roundabout_successor = {
-            current: self.roundabout_ring[(index - 1) % len(self.roundabout_ring)]
-            for index, current in enumerate(self.roundabout_ring)
-        } if self.roundabout_ring else {}
+
+        self._roundabout_successor = {}
+        for index, current in enumerate(self.roundabout_ring):
+            previous_index = (index - 1) % len(self.roundabout_ring)
+            self._roundabout_successor[current] = self.roundabout_ring[previous_index]
+
         self._diagonal_edges = self._build_diagonal_edges()
 
-    def set_blocked(self, blocked: set[GridPos]) -> None:
-        """Cập nhật ô bị chặn và dựng lại các cạnh chéo hợp lệ."""
+    def set_blocked(self, blocked):
+        """Doi danh sach o bi chan."""
 
         self.blocked = blocked or set()
         self._diagonal_edges = self._build_diagonal_edges()
 
-    def find_path(self, start: GridPos, goal: GridPos, algorithm: str = "ASTAR") -> PathResult:
-        """Điểm vào chính: chọn thuật toán theo tên và trả về PathResult."""
+    def find_path(self, start, goal, algorithm="ASTAR"):
+        """Chon thuat toan theo ten."""
 
-        algorithm = str(algorithm or "ASTAR").upper()
+        name = str(algorithm or "ASTAR").upper()
 
-        # Nhóm 1: uninformed search.
-        if algorithm in ("BFS", "BREADTH_FIRST_SEARCH"):
+        if name == "BFS" or name == "BREADTH_FIRST_SEARCH":
             return self.bfs(start, goal)
 
-        if algorithm in ("DFS", "DEPTH_FIRST_SEARCH"):
+        if name == "DFS" or name == "DEPTH_FIRST_SEARCH":
             return self.dfs(start, goal)
 
-        if algorithm in ("UCS", "UNIFORM_COST_SEARCH"):
+        if name == "UCS" or name == "UNIFORM_COST_SEARCH":
             return self.ucs(start, goal)
 
-        # Nhóm 2: informed search.
-        if algorithm in ("GREEDY", "GREEDY_BEST_FIRST", "GREEDY_BEST_FIRST_SEARCH"):
+        if name in ("GREEDY", "GREEDY_BEST_FIRST", "GREEDY_BEST_FIRST_SEARCH"):
             return self.greedy_best_first(start, goal)
 
-        if algorithm in ("ASTAR", "A*", "A_STAR"):
+        if name in ("ASTAR", "A*", "A_STAR"):
             return self.astar(start, goal)
 
-        if algorithm in ("IDA_STAR", "IDASTAR", "IDA*"):
+        if name in ("IDA_STAR", "IDASTAR", "IDA*"):
             return self.ida_star(start, goal)
 
-        # Nhóm 3: local search.
-        if algorithm in ("BEAM", "BEAM_SEARCH", "LOCAL_BEAM"):
-            return self.beam_search(start, goal, beam_width=4, label=algorithm)
+        if name in ("BEAM", "BEAM_SEARCH", "LOCAL_BEAM"):
+            return self.beam_search(start, goal, label=name)
 
-        if algorithm in ("SIMPLE_HILL", "HILL_CLIMBING"):
+        if name == "SIMPLE_HILL" or name == "HILL_CLIMBING":
             return self.simple_hill(start, goal)
 
-        if algorithm in ("STEEPEST_HILL", "STEEPEST_ASCENT"):
+        if name == "STEEPEST_HILL" or name == "STEEPEST_ASCENT":
             return self.steepest_hill(start, goal)
 
-        # Nhóm 4-6 trong Play Mode vẫn cần path grid; adapter dùng thuật toán gần nhất
-        # để NPC có thể di chuyển, còn mô phỏng đầy đủ nằm trong gameplay/auto.
-        if algorithm in ("NO_OBSERVATION", "NO_OBS"):
-            return self._with_algorithm_label(
-                self.partial_observation(start, goal, view_radius=0),
-                "NO_OBSERVATION",
-            )
+        # Cac nhom duoi day trong play mode van can mot path de NPC di duoc.
+        # Vi vay ta dung thuat toan gan dung roi doi ten hien thi.
+        if name == "NO_OBSERVATION" or name == "NO_OBS":
+            result = self.partial_observation(start, goal, view_radius=0)
+            result.algorithm = "NO_OBSERVATION"
+            return result
 
-        if algorithm in ("PARTIAL", "PARTIAL_OBSERVATION", "PARTIALLY_OBSERVATION"):
+        if name in ("PARTIAL", "PARTIAL_OBSERVATION", "PARTIALLY_OBSERVATION"):
             return self.partial_observation(start, goal, view_radius=7)
 
-        if algorithm in ("AND_OR_SEARCH", "AND_OR"):
-            return self._with_algorithm_label(self.astar(start, goal), "AND_OR_SEARCH")
+        if name == "AND_OR_SEARCH" or name == "AND_OR":
+            result = self.astar(start, goal)
+            result.algorithm = "AND_OR_SEARCH"
+            return result
 
-        if algorithm in ("BACKTRACKING", "FORWARD_CHECKING", "AC3_BACKTRACKING"):
-            return self._with_algorithm_label(self.ucs(start, goal), algorithm)
+        if name in ("BACKTRACKING", "FORWARD_CHECKING", "AC3_BACKTRACKING"):
+            result = self.ucs(start, goal)
+            result.algorithm = name
+            return result
 
-        if algorithm in ("MINIMAX", "ALPHA_BETA", "EXPECTIMAX"):
-            return self._with_algorithm_label(self.greedy_best_first(start, goal), algorithm)
+        if name in ("MINIMAX", "ALPHA_BETA", "EXPECTIMAX"):
+            result = self.greedy_best_first(start, goal)
+            result.algorithm = name
+            return result
 
         return self.astar(start, goal)
 
-    @staticmethod
-    def _with_algorithm_label(result: PathResult, label: str) -> PathResult:
-        """Giữ path của thuật toán fallback nhưng đổi nhãn để HUD/CSV hiển thị đúng."""
+    def weighted_neighbors(self, pos):
+        """Lay cac o hang xom kem chi phi di chuyen."""
 
-        result.algorithm = label
+        result = []
+
+        for next_pos in self.neighbors(pos):
+            cost = self.move_cost(pos, next_pos)
+            result.append((next_pos, cost))
+
         return result
 
-    def _weighted_neighbors(self, pos: GridPos) -> list[tuple[GridPos, float]]:
-        """Neighbor kèm cost, dùng cho BFS/UCS/A*/Greedy/IDA*."""
-
-        return [(nxt, self.move_cost(pos, nxt)) for nxt in self.neighbors(pos)]
-
-    def _unweighted_neighbors(self, pos: GridPos) -> list[GridPos]:
-        """Neighbor không kèm cost, dùng cho local search."""
+    def simple_neighbors(self, pos):
+        """Lay cac o hang xom, khong can chi phi."""
 
         return list(self.neighbors(pos))
 
-    def _to_path_result(self, result, label: str | None = None) -> PathResult:
-        """Đổi SearchResult/LocalPathResult thành PathResult của gameplay."""
+    def search_result_to_path_result(self, result, label):
+        """Doi SearchResult cua BFS/UCS/A* ve PathResult cua game."""
 
-        algorithm = label or getattr(result, "algorithm", "")
-        success = bool(getattr(result, "success", getattr(result, "found", False)))
         return PathResult(
-            path=list(getattr(result, "path", [])),
-            expanded_nodes=int(getattr(result, "expanded_nodes", 0)),
-            success=success,
-            algorithm=algorithm,
+            path=list(result.path),
+            expanded_nodes=result.expanded_nodes,
+            success=result.success,
+            algorithm=label,
         )
 
-    def _pathfinding_result(
-        self,
-        search_fn,
-        start: GridPos,
-        goal: GridPos,
-        label: str | None = None,
-        *args,
-        **kwargs,
-    ) -> PathResult:
-        """Chạy nhóm thuật toán nhận neighbor có trọng số."""
+    def local_result_to_path_result(self, result, label):
+        """Doi ket qua local search ve PathResult cua game."""
 
+        return PathResult(
+            path=list(result.path),
+            expanded_nodes=result.expanded_nodes,
+            success=result.found,
+            algorithm=label,
+        )
+
+    def fail_result(self, label):
+        return PathResult([], 0, False, label)
+
+    def bfs(self, start, goal):
         if not self.is_walkable(start) or not self.is_walkable(goal):
-            return PathResult([], 0, False, label or "")
+            return self.fail_result("BFS")
 
-        result = search_fn(start, goal, self._weighted_neighbors, *args, **kwargs)
-        return self._to_path_result(result, label)
+        result = pathfinding_bfs(start, goal, self.weighted_neighbors)
+        return self.search_result_to_path_result(result, "BFS")
 
-    def _local_result(
-        self,
-        search_fn,
-        start: GridPos,
-        goal: GridPos,
-        label: str,
-        *args,
-        **kwargs,
-    ) -> PathResult:
-        """Chạy local search và fallback sang A* nếu local search bị kẹt."""
-
+    def dfs(self, start, goal, max_depth=None):
         if not self.is_walkable(start) or not self.is_walkable(goal):
-            return PathResult([], 0, False, label)
+            return self.fail_result("DFS")
 
-        result = search_fn(
+        if max_depth is None:
+            max_depth = self.cols * self.rows
+
+        result = pathfinding_dfs(
             start,
             goal,
-            self._unweighted_neighbors,
-            lambda pos: self.distance(pos, goal),
-            *args,
-            **kwargs,
+            self.weighted_neighbors,
+            max_depth=max_depth,
         )
-        path_result = self._to_path_result(result, label)
+        return self.search_result_to_path_result(result, "DFS")
+
+    def ucs(self, start, goal):
+        if not self.is_walkable(start) or not self.is_walkable(goal):
+            return self.fail_result("UCS")
+
+        result = pathfinding_ucs(start, goal, self.weighted_neighbors)
+        return self.search_result_to_path_result(result, "UCS")
+
+    def greedy_best_first(self, start, goal):
+        if not self.is_walkable(start) or not self.is_walkable(goal):
+            return self.fail_result("GREEDY")
+
+        result = greedy_best_first_search(
+            start,
+            goal,
+            self.weighted_neighbors,
+            self.distance,
+        )
+        return self.search_result_to_path_result(result, "GREEDY")
+
+    def astar(self, start, goal):
+        if not self.is_walkable(start) or not self.is_walkable(goal):
+            return self.fail_result("ASTAR")
+
+        result = pathfinding_astar(
+            start,
+            goal,
+            self.weighted_neighbors,
+            self.distance,
+        )
+        return self.search_result_to_path_result(result, "ASTAR")
+
+    def ida_star(self, start, goal):
+        if not self.is_walkable(start) or not self.is_walkable(goal):
+            return self.fail_result("IDA_STAR")
+
+        result = pathfinding_ida_star(
+            start,
+            goal,
+            self.weighted_neighbors,
+            self.distance,
+            max_iterations=80,
+            max_expanded_nodes=min(4000, max(500, self.cols * self.rows * 3)),
+        )
+        path_result = self.search_result_to_path_result(result, "IDA_STAR")
+
+        # Neu IDA* khong tim thay, dung A* de game van co duong di.
+        if path_result.success:
+            return path_result
+
+        fallback = self.astar(start, goal)
+        fallback.expanded_nodes += path_result.expanded_nodes
+        fallback.algorithm = "IDA_STAR"
+        return fallback
+
+    def beam_search(self, start, goal, beam_width=4, label="BEAM"):
+        if not self.is_walkable(start) or not self.is_walkable(goal):
+            return self.fail_result(label)
+
+        result = local_beam_search(
+            start,
+            goal,
+            self.simple_neighbors,
+            lambda pos: self.distance(pos, goal),
+            beam_width=beam_width,
+            max_steps=self.cols * self.rows,
+        )
+        path_result = self.local_result_to_path_result(result, label)
+        return self.finish_local_search(path_result, start, goal, label)
+
+    def simple_hill(self, start, goal):
+        label = "SIMPLE_HILL"
+
+        if not self.is_walkable(start) or not self.is_walkable(goal):
+            return self.fail_result(label)
+
+        result = pathfinding_simple_hill(
+            start,
+            goal,
+            self.simple_neighbors,
+            lambda pos: self.distance(pos, goal),
+            max_steps=self.cols * self.rows,
+        )
+        path_result = self.local_result_to_path_result(result, label)
+        return self.finish_local_search(path_result, start, goal, label)
+
+    def steepest_hill(self, start, goal):
+        label = "STEEPEST_HILL"
+
+        if not self.is_walkable(start) or not self.is_walkable(goal):
+            return self.fail_result(label)
+
+        result = pathfinding_steepest_hill(
+            start,
+            goal,
+            self.simple_neighbors,
+            lambda pos: self.distance(pos, goal),
+            max_steps=self.cols * self.rows,
+        )
+        path_result = self.local_result_to_path_result(result, label)
+        return self.finish_local_search(path_result, start, goal, label)
+
+    def finish_local_search(self, path_result, start, goal, label):
+        """Local search co the ket giua duong, nen thu noi tiep bang A*."""
 
         if path_result.success:
             return path_result
 
-        # Local search có thể kẹt ở local optimum, nên nối thêm A* từ điểm cuối.
-        fallback = self.astar(path_result.path[-1] if path_result.path else start, goal)
-        if fallback.success and fallback.path:
-            path_prefix = path_result.path[:-1] if path_result.path else []
+        if path_result.path:
+            restart = path_result.path[-1]
+            prefix = path_result.path[:-1]
+        else:
+            restart = start
+            prefix = []
+
+        fallback = self.astar(restart, goal)
+        if fallback.success:
             return PathResult(
-                path=path_prefix + fallback.path,
+                path=prefix + fallback.path,
                 expanded_nodes=path_result.expanded_nodes + fallback.expanded_nodes,
                 success=True,
                 algorithm=label,
@@ -211,166 +321,105 @@ class GamePathfinder:
 
         return path_result
 
-    def bfs(self, start: GridPos, goal: GridPos) -> PathResult:
-        return self._pathfinding_result(pathfinding_bfs, start, goal, "BFS")
+    def partial_observation(self, start, goal, view_radius=7):
+        """Ban don gian: di gan ve dich, khi thay dich thi dung A*."""
 
-    def dfs(self, start: GridPos, goal: GridPos, max_depth: int | None = None) -> PathResult:
-        return self._pathfinding_result(
-            pathfinding_dfs,
-            start,
-            goal,
-            "DFS",
-            max_depth=max_depth or self.cols * self.rows,
-        )
-
-    def ucs(self, start: GridPos, goal: GridPos) -> PathResult:
-        return self._pathfinding_result(pathfinding_ucs, start, goal, "UCS")
-
-    def greedy_best_first(self, start: GridPos, goal: GridPos) -> PathResult:
-        return self._pathfinding_result(
-            greedy_best_first_search,
-            start,
-            goal,
-            "GREEDY",
-            heuristic=self.distance,
-        )
-
-    def astar(self, start: GridPos, goal: GridPos) -> PathResult:
-        return self._pathfinding_result(
-            pathfinding_astar,
-            start,
-            goal,
-            "ASTAR",
-            heuristic=self.distance,
-        )
-
-    def ida_star(self, start: GridPos, goal: GridPos) -> PathResult:
-        """IDA* có giới hạn để tránh làm chậm frame; fail thì fallback sang A*."""
-
-        result = self._pathfinding_result(
-            pathfinding_ida_star,
-            start,
-            goal,
-            "IDA_STAR",
-            heuristic=self.distance,
-            max_iterations=80,
-            max_expanded_nodes=min(4000, max(500, self.cols * self.rows * 3)),
-        )
-
-        if result.success:
-            return result
-
-        fallback = self.astar(start, goal)
-        fallback.expanded_nodes += result.expanded_nodes
-        return self._with_algorithm_label(fallback, "IDA_STAR")
-
-    def beam_search(self, start: GridPos, goal: GridPos, beam_width: int = 4, label: str = "BEAM") -> PathResult:
-        return self._local_result(
-            local_beam_search,
-            start,
-            goal,
-            label,
-            beam_width=beam_width,
-            max_steps=self.cols * self.rows,
-        )
-
-    def simple_hill(self, start: GridPos, goal: GridPos) -> PathResult:
-        return self._local_result(
-            pathfinding_simple_hill,
-            start,
-            goal,
-            "SIMPLE_HILL",
-            max_steps=self.cols * self.rows,
-        )
-
-    def steepest_hill(self, start: GridPos, goal: GridPos) -> PathResult:
-        return self._local_result(
-            pathfinding_steepest_hill,
-            start,
-            goal,
-            "STEEPEST_HILL",
-            max_steps=self.cols * self.rows,
-        )
-
-    def partial_observation(self, start: GridPos, goal: GridPos, view_radius: int = 7) -> PathResult:
-        """Bản gameplay đơn giản của partial observation: đi tham lam tới khi thấy goal."""
+        label = "PARTIAL_OBSERVATION"
 
         if not self.is_walkable(start) or not self.is_walkable(goal):
-            return PathResult([], 0, False, "PARTIAL_OBSERVATION")
+            return self.fail_result(label)
 
         current = start
-        full_path = [start]
+        path = [start]
         expanded = 0
-        visited_count: Dict[GridPos, int] = {start: 1}
+        visited_count = {start: 1}
         max_steps = min(250, max(50, self.cols * self.rows // 4))
 
         for _ in range(max_steps):
             if current == goal:
-                return PathResult(full_path, expanded, True, "PARTIAL_OBSERVATION")
+                return PathResult(path, expanded, True, label)
 
             if self.distance(current, goal) <= view_radius:
-                # Khi goal nằm trong vùng quan sát, dùng A* để đi phần còn lại.
-                result = self.astar(current, goal)
-                expanded += result.expanded_nodes
+                rest = self.astar(current, goal)
+                expanded += rest.expanded_nodes
 
-                if result.success and len(result.path) > 1:
-                    return PathResult(full_path[:-1] + result.path, expanded, True, "PARTIAL_OBSERVATION")
+                if rest.success and len(rest.path) > 1:
+                    return PathResult(path[:-1] + rest.path, expanded, True, label)
 
             options = list(self.neighbors(current))
-
             if not options:
                 break
 
             options.sort(
                 key=lambda pos: (
-                    # Ưu tiên gần goal hơn, phạt ô đã ghé nhiều để giảm vòng lặp.
                     self.distance(pos, goal) + visited_count.get(pos, 0) * 5,
                     random.random(),
                 )
             )
 
-            nxt = options[0]
-            visited_count[nxt] = visited_count.get(nxt, 0) + 1
-            current = nxt
-            full_path.append(current)
+            current = options[0]
+            path.append(current)
+            visited_count[current] = visited_count.get(current, 0) + 1
             expanded += 1
 
-        fallback = self.astar(current, goal)
-        expanded += fallback.expanded_nodes
+        rest = self.astar(current, goal)
+        expanded += rest.expanded_nodes
 
-        if fallback.success and fallback.path:
-            return PathResult(full_path[:-1] + fallback.path, expanded, True, "PARTIAL_OBSERVATION")
+        if rest.success and rest.path:
+            return PathResult(path[:-1] + rest.path, expanded, True, label)
 
-        return PathResult(full_path, expanded, current == goal, "PARTIAL_OBSERVATION")
+        return PathResult(path, expanded, current == goal, label)
 
-    def neighbors(self, pos: GridPos) -> Iterable[GridPos]:
-        """Sinh các ô có thể đi từ `pos` theo luật bản đồ hiện tại."""
+    def neighbors(self, pos):
+        """Sinh cac o co the di tu pos."""
 
         x, y = pos
 
-        directions = [(1, 0), (0, 1), (-1, 0), (0, -1)]
+        directions = [
+            (1, 0),
+            (0, 1),
+            (-1, 0),
+            (0, -1),
+        ]
 
         if self.allow_diagonal:
-            directions.extend([(1, 1), (1, -1), (-1, 1), (-1, -1)])
+            directions.extend(
+                [
+                    (1, 1),
+                    (1, -1),
+                    (-1, 1),
+                    (-1, -1),
+                ]
+            )
 
         for dx, dy in directions:
-            nxt = (x + dx, y + dy)
+            next_pos = (x + dx, y + dy)
 
-            if self.can_step(pos, nxt):
-                yield nxt
+            if self.can_step(pos, next_pos):
+                yield next_pos
 
-    def is_walkable(self, pos: GridPos) -> bool:
-        """Một ô đi được nếu nằm trong map và không thuộc blocked positions."""
+    def is_walkable(self, pos):
+        """Kiem tra mot o co nam trong map va khong bi chan khong."""
 
         x, y = pos
-        return 0 <= x < self.cols and 0 <= y < self.rows and pos not in self.blocked
+
+        if x < 0 or x >= self.cols:
+            return False
+
+        if y < 0 or y >= self.rows:
+            return False
+
+        if pos in self.blocked:
+            return False
+
+        return True
 
     @staticmethod
-    def manhattan(a: GridPos, b: GridPos) -> int:
+    def manhattan(a, b):
         return abs(a[0] - b[0]) + abs(a[1] - b[1])
 
-    def distance(self, a: GridPos, b: GridPos) -> float:
-        """Heuristic khoảng cách: Manhattan cho 4 hướng, octile nhẹ cho đi chéo."""
+    def distance(self, a, b):
+        """Uoc luong khoang cach tu a den b."""
 
         dx = abs(a[0] - b[0])
         dy = abs(a[1] - b[1])
@@ -378,90 +427,112 @@ class GamePathfinder:
         if not self.allow_diagonal:
             return dx + dy
 
-        return max(dx, dy) + (1.41421356237 - 1.0) * min(dx, dy)
+        diagonal = min(dx, dy)
+        straight = max(dx, dy) - diagonal
+        return straight + diagonal * 1.41421356237
 
     @staticmethod
-    def move_cost(a: GridPos, b: GridPos) -> float:
-        return 1.41421356237 if a[0] != b[0] and a[1] != b[1] else 1.0
+    def move_cost(a, b):
+        """Di ngang/doc ton 1, di cheo ton can bac hai cua 2."""
 
-    def _can_step(self, start: GridPos, end: GridPos) -> bool:
-        """Kiểm tra riêng luật một bước: kề nhau, đi chéo hợp lệ, roundabout."""
+        if a[0] != b[0] and a[1] != b[1]:
+            return 1.41421356237
 
+        return 1.0
+
+    def can_step(self, start, end):
+        """Kiem tra co duoc di mot buoc tu start sang end khong."""
+
+        if not self.is_walkable(start):
+            return False
+
+        if not self.is_walkable(end):
+            return False
+
+        if not self._roundabout_transition_allowed(start, end):
+            return False
+
+        return self._can_step(start, end)
+
+    def _can_step(self, start, end):
         dx = end[0] - start[0]
         dy = end[1] - start[1]
 
-        if abs(dx) <= 1 and abs(dy) <= 1 and (dx != 0 or dy != 0):
-            if self._edge_key(start, end) in self._roundabout_edges:
-                return True
+        # Khong dung yen tai cho.
+        if dx == 0 and dy == 0:
+            return False
 
-            if dx == 0 or dy == 0:
-                return True
+        # Chi duoc di sang o ke ben.
+        if abs(dx) > 1 or abs(dy) > 1:
+            return False
 
-            horizontal_side = (start[0] + dx, start[1])
-            vertical_side = (start[0], start[1] + dy)
+        if self._edge_key(start, end) in self._roundabout_edges:
+            return True
 
-            if self._edge_key(start, end) in self._diagonal_edges:
-                return True
+        # Di ngang/doc.
+        if dx == 0 or dy == 0:
+            return True
 
-            # Preserve short corner-connected diagonal pieces that are too
-            # small to form a full detected corridor.
-            return not self.is_walkable(horizontal_side) and not self.is_walkable(vertical_side)
+        # Di cheo theo canh da cho phep.
+        if self._edge_key(start, end) in self._diagonal_edges:
+            return True
 
-        return False
+        # Truong hop hai o noi voi nhau bang goc nho.
+        horizontal_side = (start[0] + dx, start[1])
+        vertical_side = (start[0], start[1] + dy)
+        return not self.is_walkable(horizontal_side) and not self.is_walkable(vertical_side)
 
-    def can_step(self, start: GridPos, end: GridPos) -> bool:
-        """Điều kiện đầy đủ để đi từ start sang end."""
+    def is_roundabout_edge(self, start, end):
+        if start not in self._roundabout_nodes:
+            return False
 
-        return (
-            self.is_walkable(start)
-            and self.is_walkable(end)
-            and self._roundabout_transition_allowed(start, end)
-            and self._can_step(start, end)
-        )
-
-    def is_roundabout_edge(self, start: GridPos, end: GridPos) -> bool:
-        if start not in self._roundabout_nodes or end not in self._roundabout_nodes:
+        if end not in self._roundabout_nodes:
             return False
 
         return self._edge_key(start, end) in self._roundabout_edges
 
-    def is_roundabout_connection(self, start: GridPos, end: GridPos) -> bool:
+    def is_roundabout_connection(self, start, end):
         return self._edge_key(start, end) in self._roundabout_connection_edges
 
-    def _roundabout_transition_allowed(self, start: GridPos, end: GridPos) -> bool:
-        """Roundabout chỉ cho đi theo chiều vòng và qua các cổng kết nối."""
+    def _roundabout_transition_allowed(self, start, end):
+        start_in_roundabout = start in self._roundabout_nodes
+        end_in_roundabout = end in self._roundabout_nodes
 
-        if start not in self._roundabout_nodes and end not in self._roundabout_nodes:
+        if not start_in_roundabout and not end_in_roundabout:
             return True
 
-        if start in self._roundabout_nodes and end in self._roundabout_nodes:
+        if start_in_roundabout and end_in_roundabout:
             return self._roundabout_successor.get(start) == end
 
         return self._edge_key(start, end) in self._roundabout_connection_edges
 
-    def _build_roundabout_edges(self) -> set[tuple[GridPos, GridPos]]:
-        """Dựng tập cạnh hợp lệ của vòng xuyến và các nhánh nối."""
-
+    def _build_roundabout_edges(self):
         edges = set(self._roundabout_connection_edges)
 
         if len(self.roundabout_ring) >= 2:
             for index, current in enumerate(self.roundabout_ring):
-                following = self.roundabout_ring[(index + 1) % len(self.roundabout_ring)]
-                edges.add(self._edge_key(current, following))
+                next_index = (index + 1) % len(self.roundabout_ring)
+                next_pos = self.roundabout_ring[next_index]
+                edges.add(self._edge_key(current, next_pos))
 
         return edges
 
     @staticmethod
-    def _edge_key(a: GridPos, b: GridPos) -> tuple[GridPos, GridPos]:
-        return (a, b) if a <= b else (b, a)
+    def _edge_key(a, b):
+        """Luu canh theo mot dang duy nhat."""
 
-    def _build_diagonal_edges(self, minimum_run: int = 4) -> set[tuple[GridPos, GridPos]]:
-        """Tự phát hiện các dải đường chéo đủ dài để cho phép đi chéo."""
+        if a <= b:
+            return (a, b)
+
+        return (b, a)
+
+    def _build_diagonal_edges(self, minimum_run=4):
+        """Tim cac doan duong cheo dai de cho phep di cheo."""
 
         if not self.allow_diagonal:
             return set()
 
-        edges: set[tuple[GridPos, GridPos]] = set()
+        edges = set()
 
         for dx, dy in ((1, 1), (1, -1)):
             for y in range(self.rows):
@@ -472,22 +543,22 @@ class GamePathfinder:
                         continue
 
                     previous = (x - dx, y - dy)
-
                     if self.is_walkable(previous):
                         continue
 
-                    run = []
+                    diagonal_line = []
                     current = start
 
                     while self.is_walkable(current):
-                        run.append(current)
+                        diagonal_line.append(current)
                         current = (current[0] + dx, current[1] + dy)
 
-                    if len(run) < minimum_run:
+                    if len(diagonal_line) < minimum_run:
                         continue
 
-                    for first, second in zip(run, run[1:]):
+                    for i in range(len(diagonal_line) - 1):
+                        first = diagonal_line[i]
+                        second = diagonal_line[i + 1]
                         edges.add(self._edge_key(first, second))
 
         return edges
-
