@@ -57,7 +57,7 @@ def minimax_search(
     started_at = perf_counter()
     reward_map = build_reward_map(orders)
     state = initial_state or build_initial_state(order_ids)
-    stats = {"expanded": 0, "generated": 0, "pruned": 0}
+    stats = {"expanded": 0, "generated": 0, "pruned": 0} # sinh ra, mở rộng, cắt tỉa
 
     value, sequence = minimax_node(state, matrix, reward_map, depth_limit, stats)
     best_order_id = sequence[0] if sequence else None
