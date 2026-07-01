@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-"""Backtracking Search cho bài toán sắp thứ tự đơn hàng.
+"""Backtracking Search cho bai toan sap thu tu don hang.
 
-File này là wrapper cấu hình: dùng solver CSP chung, thử hành động theo thứ tự
-từ điển và không bật forward checking hay AC-3.
+Backtracking thuan: thu tung hanh dong hop le, sai thi quay lui.
 """
 
 from src.ai.pathfinding.csp.csp_model import (
@@ -20,8 +19,6 @@ def backtracking_search(
     cost_provider: RouteCostProvider,
     max_expanded_nodes: int = 10000,
 ) -> CSPRouteSearchResult:
-    """Chạy CSP backtracking thuần để tìm route có chi phí tốt hơn route mặc định."""
-
     return solve_csp_route(
         problem=CSPRouteProblem(
             order_ids=order_ids,
@@ -29,7 +26,7 @@ def backtracking_search(
             cost_provider=cost_provider,
         ),
         algorithm="BACKTRACKING",
-        action_strategy="LEXICOGRAPHIC",
+        action_strategy="SIMPLE",
         use_forward_checking=False,
         use_ac3_precheck=False,
         max_expanded_nodes=max_expanded_nodes,

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-"""Ham xu ly route don gian cho CSP."""
-
 import random
 from dataclasses import dataclass
 
@@ -58,29 +56,62 @@ def get_order_sequence(actions) -> list[str]:
 
 
 def validate_route_actions(actions, order_ids, capacity) -> tuple[bool, str]:
-    sequence = get_order_sequence(actions)
+    order_set = set(order_ids)
+    used_actions = set()
+    picked = set()
+    delivered = set()
+    carrying = set()
 
-    if set(sequence) != set(order_ids):
-        return False, "Route does not contain all orders."
+    if len(actions) != len(order_ids) * 2:
+        return False, "Route length is not enough."
 
-    if len(sequence) != len(order_ids):
-        return False, "Route contains duplicated orders."
+    for action in actions:
+        if action in used_actions:
+            return False, "Action is duplicated."
+        used_actions.add(action)
 
-    expected_actions = build_default_route_actions(sequence)
-    if tuple(actions) != expected_actions:
-        return False, "Each order must be pickup then delivery."
+        if "_" not in action:
+            return False, "Action label is invalid."
+
+        order_id = get_order_id(action)
+        if order_id not in order_set:
+            return False, "Action has unknown order id."
+
+        if is_pickup(action):
+            if order_id in picked:
+                return False, "Order is picked twice."
+            if len(carrying) >= capacity:
+                return False, "Capacity is exceeded."
+
+            picked.add(order_id)
+            carrying.add(order_id)
+
+        elif is_delivery(action):
+            if order_id not in picked:
+                return False, "Delivery appears before pickup."
+            if order_id not in carrying:
+                return False, "Order is not being carried."
+
+            carrying.remove(order_id)
+            delivered.add(order_id)
+
+        else:
+            return False, "Action must be pickup or delivery."
+
+    if picked != order_set:
+        return False, "Not all orders are picked."
+    if delivered != order_set:
+        return False, "Not all orders are delivered."
+    if carrying:
+        return False, "Some orders are still being carried."
 
     return True, ""
 
 
-def get_leg_cost(cost_provider, start_label, pickup_label, delivery_label):
+def get_action_cost(cost_provider, from_label, to_label):
     if hasattr(cost_provider, "get_heuristic_cost"):
-        first = cost_provider.get_heuristic_cost(start_label, pickup_label)
-        second = cost_provider.get_heuristic_cost(pickup_label, delivery_label)
-    else:
-        first = cost_provider.get_cost(start_label, pickup_label)
-        second = cost_provider.get_cost(pickup_label, delivery_label)
-    return first, second
+        return cost_provider.get_heuristic_cost(from_label, to_label)
+    return cost_provider.get_cost(from_label, to_label)
 
 
 def evaluate_route(actions, order_ids, capacity, cost_provider) -> RouteEvaluation:
@@ -91,22 +122,19 @@ def evaluate_route(actions, order_ids, capacity, cost_provider) -> RouteEvaluati
     total_cost = 0.0
     current_label = "START"
 
-    for order_id in get_order_sequence(actions):
-        pickup = f"P_{order_id}"
-        delivery = f"D_{order_id}"
-        first, second = get_leg_cost(cost_provider, current_label, pickup, delivery)
-
-        if first == float("inf") or second == float("inf"):
+    for action in actions:
+        step_cost = get_action_cost(cost_provider, current_label, action)
+        if step_cost == float("inf"):
             return RouteEvaluation(tuple(actions), float("inf"), False, "No path in route.")
 
-        total_cost += first + second
-        current_label = delivery
+        total_cost += step_cost
+        current_label = action
 
     return RouteEvaluation(tuple(actions), total_cost, True, "")
 
 
-def make_route_state(actions, order_ids, capacity, cost_provider) -> RouteState:
-    evaluation = evaluate_route(actions, order_ids, capacity, cost_provider)
+def make_route_state(actions, order_ids, capacity, cost_provider) -> RouteState :
+    evaluation = evaluate_route(actions, order_ids, capacity, cost_provider) # kiểm tra tính hợp lệ của các hành động và tính toán chi phí tổng thể của route
     return RouteState(
         actions=evaluation.actions,
         total_cost=evaluation.total_cost,
@@ -117,16 +145,15 @@ def make_route_state(actions, order_ids, capacity, cost_provider) -> RouteState:
 
 def generate_order_swap_neighbors(state, order_ids, capacity, cost_provider) -> list[RouteState]:
     neighbors = []
-    sequence = get_order_sequence(state.actions)
+    actions = list(state.actions)
 
-    for i in range(len(sequence)):
-        for j in range(i + 1, len(sequence)):
-            new_sequence = list(sequence)
-            new_sequence[i], new_sequence[j] = new_sequence[j], new_sequence[i]
-            actions = build_default_route_actions(new_sequence)
-            neighbor = make_route_state(actions, order_ids, capacity, cost_provider)
-            if neighbor.is_valid:
-                neighbors.append(neighbor)
+    for i in range(len(actions)):
+        for j in range(i + 1, len(actions)):
+            candidate_actions = list(actions)
+            candidate_actions[i], candidate_actions[j] = candidate_actions[j], candidate_actions[i]
+            candidate = make_route_state(candidate_actions, order_ids, capacity, cost_provider)
+            if candidate.is_valid:
+                neighbors.append(candidate)
 
     return neighbors
 
@@ -136,6 +163,30 @@ def generate_route_neighbors(state, order_ids, capacity, cost_provider) -> list[
 
 
 def random_valid_route_actions(order_ids, capacity, rng: random.Random) -> tuple[str, ...]:
-    sequence = list(order_ids)
-    rng.shuffle(sequence)
-    return build_default_route_actions(sequence)
+    waiting = set(order_ids)
+    carrying = set()
+    delivered = set()
+    actions = []
+
+    while len(delivered) < len(order_ids):
+        choices = []
+
+        if len(carrying) < capacity:
+            for order_id in waiting:
+                choices.append(f"P_{order_id}")
+
+        for order_id in carrying:
+            choices.append(f"D_{order_id}")
+
+        action = rng.choice(choices)
+        order_id = get_order_id(action)
+        actions.append(action)
+
+        if is_pickup(action):
+            waiting.remove(order_id)
+            carrying.add(order_id)
+        else:
+            carrying.remove(order_id)
+            delivered.add(order_id)
+
+    return tuple(actions)

@@ -33,10 +33,10 @@ def alpha_beta_node(state, matrix, reward_map, depth_limit, alpha, beta, stats):
 
     if state.turn == PLAYER_TURN:
         best_value = float("-inf")
-        best_sequence = tuple()
+        best_sequence = tuple() # ban đầu chưa có chuỗi hành động tốt nhất
 
         for order_id in actions:
-            child = apply_action(state, order_id, matrix, reward_map)
+            child = apply_action(state, order_id, matrix, reward_map) # đệ quy áp dụng hành động và tạo ra trạng thái con
             value, sequence = alpha_beta_node(
                 child,
                 matrix,
@@ -47,13 +47,13 @@ def alpha_beta_node(state, matrix, reward_map, depth_limit, alpha, beta, stats):
                 stats,
             )
 
-            if value > best_value:
+            if value > best_value: 
                 best_value = value
                 best_sequence = (order_id, *sequence)
 
             alpha = max(alpha, best_value)
             if beta <= alpha:
-                stats["pruned"] += 1
+                stats["pruned"] += 1 # cắt nhánh
                 break
 
         return best_value, best_sequence
@@ -93,8 +93,8 @@ def alpha_beta_search(
     initial_state: AdversarialGameState | None = None,
 ) -> AdversarialSearchResult:
     started_at = perf_counter()
-    reward_map = build_reward_map(orders)
-    state = initial_state or build_initial_state(order_ids)
+    reward_map = build_reward_map(orders) 
+    state = initial_state or build_initial_state(order_ids)  # chưa có trạng thái ban đầu, tạo mới
     stats = {"expanded": 0, "generated": 0, "pruned": 0}
 
     value, sequence = alpha_beta_node(
@@ -102,8 +102,8 @@ def alpha_beta_search(
         matrix,
         reward_map,
         depth_limit,
-        float("-inf"),
-        float("inf"),
+        float("-inf"), # anpha = -infinity
+        float("inf"), # beta = +infinity
         stats,
     )
     best_order_id = sequence[0] if sequence else None

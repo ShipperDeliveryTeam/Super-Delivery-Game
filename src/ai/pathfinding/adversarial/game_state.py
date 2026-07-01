@@ -104,7 +104,7 @@ def apply_action(state: AdversarialGameState, order_id: str, matrix, reward_map)
 
 def order_actions_by_gain(state: AdversarialGameState, actions: list[str], matrix, reward_map):
     if state.turn == PLAYER_TURN:
-        label = state.player_label
+        label = state.player_label # lấy nhãn hiện tại của người chơi
         reverse = True
     else:
         label = state.opponent_label
